@@ -1,0 +1,47 @@
+#!/bin/sh
+
+### BEGIN INIT INFO
+# Provides: bot
+# Required-Start:    $local_fs $syslog $network
+# Required-Stop:     $local_fs $syslog $network
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: bot
+### END INIT INFO
+
+set -e
+
+# Must be a valid filename
+NAME=bot
+RUNAS=bot
+PIDFILE=/var/run/$NAME.pid
+#This is the command to be run, give the full pathname
+DAEMON=/usr/local/bin/php
+DAEMON_OPTS="/usr/local/bin/bot/bot.php"
+
+export PATH="${PATH:+$PATH:}/usr/sbin:/sbin"
+
+case "$1" in
+  start)
+        echo -n "Starting daemon: "$NAME
+	start-stop-daemon --chuid $RUNAS --start --background --make-pidfile --quiet --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_OPTS
+        echo "."
+	;;
+  stop)
+        echo -n "Stopping daemon: "$NAME
+	start-stop-daemon --chuid $RUNAS --stop --quiet --oknodo --pidfile $PIDFILE
+        echo "."
+	;;
+  restart)
+        echo -n "Restarting daemon: "$NAME
+	start-stop-daemon --chuid $RUNAS --stop --quiet --oknodo --retry 30 --pidfile $PIDFILE
+	start-stop-daemon --chuid $RUNAS --start --background --make-pidfile --quiet --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_OPTS
+	echo "."
+	;;
+
+  *)
+	echo "Usage: "$1" {start|stop|restart}"
+	exit 1
+esac
+
+exit 0

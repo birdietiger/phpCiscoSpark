@@ -1,0 +1,10 @@
+/var/log/bots/*.log {
+  copytruncate
+  minsize 10M
+  delaycompress
+  hourly
+  rotate 100
+  compress
+  missingok
+  create 640 bot root
+}
