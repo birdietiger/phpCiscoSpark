@@ -4,7 +4,6 @@ class WolframAlpha {
 
    protected $logger;
    private $AppID;
-   public $format;
    public $config_file;
    public $engine;
 
@@ -21,8 +20,6 @@ class WolframAlpha {
       else $this->logger->addWarning(__FILE__.": ".__METHOD__.": config file doesn't exist");
       if (!empty($config['AppID'])) $this->AppID = $config['AppID'];
       else $this->logger->addWarning(__FILE__.": ".__METHOD__.": missing configuration parameter: AppID");
-      if (!empty($config['format'])) $this->format = $config['format'];
-      else $this->logger->addWarning(__FILE__.": ".__METHOD__.": missing configuration parameter: format");
    }
 
 }
