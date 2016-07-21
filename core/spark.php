@@ -31,8 +31,7 @@ class Spark {
 	public $me;
 	protected $registered_shutdown_function = false;
 	protected $existing_webhooks;
-	protected $existing_webhooks_rooms;
-	protected $webhook_target_topic = '[email]/webhooks/[id]';
+	protected $webhook_target_topic = '[email]/webhooks/';
 	protected $get_all_number = 100000;
 	protected $bot_trigger_prefix = 'ciscosparkbot';
 	protected $bot_trigger_types = array(
@@ -43,7 +42,6 @@ class Spark {
 		'sleep' => 100000, // usecs
 		'garbage' => 500000, // usecs
 		'token' => 1800, // secs
-		'webhook' => 30, // secs
 		'storage' => 10, // secs
 		);
 	protected $reload_subscriptions = false;
@@ -76,7 +74,7 @@ class Spark {
 	protected $direct_help = false;
 	protected $detect_unknown_commands = false;
 	protected $delete_invalid_commands = false;
-	protected $webhook_direct = false;
+	protected $webhook_direct = true;
 	protected $get_room_type = 'all';
 	protected $room_types = array('all', 'direct', 'group');
 
@@ -181,13 +179,11 @@ class Spark {
 			return false;
 		}
 		if (
-			!empty($json_data['name']) &&
-			!empty($json_data['targetUrl']) &&
-			!empty($json_data['resource']) &&
-			!empty($json_data['event']) &&
-			($json_data['resource'] == 'messages' && $json_data['event'] == 'created') &&
-			!empty($json_data['filter']) &&
-			!empty($json_data['data'])
+			!empty($json_data['name'])
+			&& !empty($json_data['targetUrl'])
+			&& !empty($json_data['resource'])
+			&& !empty($json_data['event'])
+			&& !empty($json_data['data'])
 			) {
 				$this->logger->addInfo(__FILE__.": ".__METHOD__.": appears to be webhook");
 				$this->post_webhook_json = $post_data;
@@ -295,6 +291,10 @@ class Spark {
 			return false;
 		}
 
+		if (empty($this->existing_rooms = $this->get_all_rooms())) {
+  	   	$this->logger->addWarning(__FILE__.": ".__METHOD__.": not a member of any rooms");
+		}
+
 		if (empty($this->create_all_webhooks())) {
 			$this->logger->addError(__FILE__.": ".__METHOD__.": failed to create all webhooks, so can't start listening");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
@@ -310,7 +310,6 @@ class Spark {
 		}
 
 		$next_token_check = time() + $this->loop_timers['token'];
-		$next_webhook_check = time() + $this->loop_timers['webhook'];
 		$next_garbage_check = microtime(true)*1000000 + $this->loop_timers['garbage'];
 		$next_storage_check = time() + $this->loop_timers['storage'];
 		$next_timer_check = time() + 1; // not needed unless support for usec timer is added
@@ -392,12 +391,6 @@ class Spark {
 			if ($this->multithreaded && $next_garbage_check <= microtime(true)*1000000) {
 				$this->collect_worker_garbage();
 				$next_garbage_check = microtime(true)*1000000 + $this->loop_timers['garbage'];
-			}
-
-			// update webhooks for all rooms
-			if ($next_webhook_check <= time()) {
-				$this->create_all_webhooks();
-				$next_webhook_check = time() + $this->loop_timers['webhook'];
 			}
 
 			// update message subscriptions
@@ -601,6 +594,7 @@ class Spark {
 							),
 						);
 				}
+				$this->logger->addInfo(__FILE__.": ".__METHOD__.": added callback: ".$params['targetUrl']." to topic: $topic");
 				$this->reload_subscriptions = true;
 			}
 		} else if ($method == 'PUT') {
@@ -658,6 +652,7 @@ class Spark {
 			$target_url = preg_replace("/{topic}/", $webhook_target_topic, $this->broker->target_url);
 		} else $target_url = $params['targetUrl'];
 		foreach (array_keys($existing_webhooks) as $existing_webhook_key) {
+			if (empty($params['filter'])) $params['filter'] = null;
 			if (
 				$existing_webhooks[$existing_webhook_key]['targetUrl'] == $target_url &&
 				$existing_webhooks[$existing_webhook_key]['name'] == $params['name'] &&
@@ -702,8 +697,10 @@ class Spark {
 		$function_start = \function_start();
 		$existing_webhooks = array();
 		if (!empty($result = $this->webhooks('GET', array('max'=>$this->get_all_number)))) {
-			foreach ($result['items'] as $webhook_details)
+			foreach ($result['items'] as $webhook_details) {
+				if (empty($webhook_details['filter'])) $webhook_details['filter'] = null;
 				$existing_webhooks[$webhook_details['id']] = $webhook_details;
+			}
 		}
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 		return $existing_webhooks;
@@ -950,30 +947,7 @@ class Spark {
 
 	}
 
-	protected function create_all_webhooks() {
-		$function_start = \function_start();
-		if (empty($this->existing_rooms = $this->get_all_rooms())) {
-  	   	$this->logger->addWarning(__FILE__.": ".__METHOD__.": not a member of any rooms");
-			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
-		}
-		$this->existing_webhooks = $this->get_all_webhooks();
-		foreach ($this->existing_rooms as $room_key => $room_details) {
-			if (empty($this->webhook_direct) && $room_details['type'] == 'direct') continue;
-			if (!empty($this->existing_webhooks_rooms[$room_details['id']])) continue;
-			$params = array(
-				'name'=>$this->bot_webhook_name_prefix.$this->me['id'],
-				'targetUrl'=>array($this, 'bot_process_webhook'),
-				'resource'=>'messages',
-				'event'=>'created',
-				'filter'=>'roomId='.$room_details['id'],
-				);
-			list($webhook_details, $topic) = $this->does_webhook_exist($params, $this->existing_webhooks);
-			if (empty($webhook_details) || empty($topic)) {
-				if (!$this->webhooks('POST', $params, false)) {
-					$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't create a webhook for a room: ".$room_details['title'].' '.$room_details['id']);
-					continue;
-				} else {
+	/* protected NEW ROOM
 					if ($this->new_room_announce) {
 						if ($this->default_enabled_room)
 	 						$text = "I'm ready to go. /help to get started."; 
@@ -1000,29 +974,46 @@ class Spark {
 							}
 						}
 			      }
-					$this->existing_webhooks_rooms[$room_details['id']] = true;
-				}
-			} else {
-				$this->existing_webhooks_rooms[$room_details['id']] = true;
-				if (!empty($topic) && !empty($this->broker)) {
-					$this->logger->addInfo(__FILE__.": ".__METHOD__.": adding webhook to subscribe topics: $topic");
-					if (!empty($this->broker->subscribe_topics[$topic])) {
-						if (!in_array($params['targetUrl'], $this->broker->subscribe_topics[$topic]['params']['callbacks']))
-							$this->broker->subscribe_topics[$topic]['params']['callbacks'][] = $params['targetUrl'];
-					} else {
-						$this->broker->subscribe_topics[$topic] = array(
-							'qos' => 0,
-							'function' => array($this, 'parse_webhook_message'), 
-							'params' => array(
-								'callbacks' => array($params['targetUrl']),
-								),
-							);
-					}
-					$this->reload_subscriptions = true;
-				}
+	*/
+
+	protected function create_all_webhooks() {
+		$function_start = \function_start();
+
+		$this->existing_webhooks = $this->get_all_webhooks();
+		$params = array(
+			'name'=>$this->bot_webhook_name_prefix.$this->me['id'],
+			'targetUrl'=>array($this, 'bot_process_webhook'),
+			'resource'=>'all',
+			'event'=>'all',
+			);
+		list($webhook_details, $topic) = $this->does_webhook_exist($params, $this->existing_webhooks);
+		if (empty($webhook_details) || empty($topic)) {
+			if (empty($this->webhooks('POST', $params, false))) {
+				$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't create webhook");
+				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+				return false;
 			}
-			$this->storage->temp['message_count'][$room_details['id']] = (empty($this->storage->temp['message_count'][$room_details['id']])) ? 0 : $this->storage->temp['message_count'][$room_details['id']];
+		} else {
+			if (!empty($topic) && !empty($this->broker)) {
+				$this->logger->addInfo(__FILE__.": ".__METHOD__.": adding webhook to subscribe topics: $topic");
+				if (!empty($this->broker->subscribe_topics[$topic])) {
+					if (!in_array($params['targetUrl'], $this->broker->subscribe_topics[$topic]['params']['callbacks'])) {
+						$this->broker->subscribe_topics[$topic]['params']['callbacks'][] = $params['targetUrl'];
+					}
+				} else {
+					$this->broker->subscribe_topics[$topic] = array(
+						'qos' => 0,
+						'function' => array($this, 'parse_webhook_message'), 
+						'params' => array(
+							'callbacks' => array($params['targetUrl']),
+							),
+						);
+				}
+				$this->logger->addInfo(__FILE__.": ".__METHOD__.": added callback: ".$params['targetUrl']." to topic: $topic");
+				$this->reload_subscriptions = true;
+			}
 		}
+
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 		return true;
 	}
@@ -1820,6 +1811,7 @@ class Spark {
 				($spark->delete_invalid_commands && $event->command['name'] != 'help')
 				) $spark->messages('DELETE', array('messageId' => $event->webhooks['data']['id']));
 		}
+		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 	}
 
 	public function bot_command_help($spark, $logger, $storage, $extensions, $event) {
@@ -1869,6 +1861,7 @@ class Spark {
 				($spark->delete_invalid_commands && $event->command['name'] != 'help')
 				) $spark->messages('DELETE', array('messageId' => $event->webhooks['data']['id']));
 		}
+		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 		return $storage;
 	}
 
@@ -2023,8 +2016,9 @@ class Spark {
 
 			if (!empty($this->bot_triggers['hashtag'])) {
 				foreach ($this->bot_triggers['hashtag'] as $bot_hashtag_string => $bot_hashtag_string_params) {
-					if (preg_match("/#$bot_hashtag_string([^0-9a-z]|$)/i", $event->messages['text'])) {
-						$event->matches = $event->messages['text'];
+					if (preg_match_all("/(#$bot_hashtag_string)([^0-9a-z]|$)/i", $event->messages['text'], $matches)) {
+						$event->matches = $matches[1];
+						//$event->messages['clean_text'] = preg_replace("/#$bot_hashtag_string
 						if ($this->multithreaded) $this->collect_worker_garbage();
 						foreach ($bot_hashtag_string_params['callbacks'] as $callback) {
 							if ($this->multithreaded) {
@@ -2102,8 +2096,8 @@ class Spark {
 
 			if (!empty($this->bot_triggers['search'])) {
 				foreach ($this->bot_triggers['search'] as $bot_search_string => $bot_search_string_params) {
-					if (preg_match("/$bot_search_string/i", $event->messages['text'])) {
-						$event->matches = $event->messages['text'];
+					if (preg_match_all("/$bot_search_string/i", $event->messages['text'], $matches)) {
+						$event->matches = $matches[0];
 						if ($this->multithreaded) $this->collect_worker_garbage();
 						foreach ($bot_search_string_params['callbacks'] as $callback) {
 							if ($this->multithreaded) {
@@ -2171,16 +2165,8 @@ class Spark {
 				}
 			}
 		}
+		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 	}
-
-/*
-	public function merge_bot_return_data($return_data) {
-		if (is_object($return_data)) {
-			foreach (array_replace_recursive(get_object_vars($this->bot_data), get_object_vars($return_data)) as $var_name => $var_value)
-				$this->bot_data->$var_name = $var_value;
-		}
-	}
-*/
 
 	public function report_spark_slow($room_id) {
 		$function_start = \function_start();
@@ -2581,10 +2567,12 @@ class Spark {
 			}
 		}
 		if (
-			!empty($webhook_message['data']['personEmail']) && 
-			!$this->is_admin(array($webhook_message['data']['personEmail'])) &&
-			!empty($webhook_message['data']['roomId']) &&
-			!empty($this->trusted_domains[$webhook_message['data']['roomId']])
+			$webhook_message['resource'] == 'messages' 
+			&& $webhook_message['event'] == 'created'
+			!empty($webhook_message['data']['personEmail'])
+			&& !$this->is_admin(array($webhook_message['data']['personEmail']))
+			&& !empty($webhook_message['data']['roomId'])
+			&& !empty($this->trusted_domains[$webhook_message['data']['roomId']])
 			) {
 
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": trusted_domains set, so filtering webhook messages");
@@ -2601,6 +2589,7 @@ class Spark {
 				return false;
 			}
 		}
+		if (empty($webhook_message['filter'])) $webhook_message['filter'] = null;
 		if (
 			$webhook_message['name'] != $this->existing_webhooks[$webhook_message['id']]['name'] ||
 			$webhook_message['resource'] != $this->existing_webhooks[$webhook_message['id']]['resource'] ||
@@ -2640,11 +2629,58 @@ class Spark {
 					$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook memberships resource details: roomId: ".$event->rooms['id']." personId: ".$event->people['id']);
 			}
 		}
-		$this->storage->temp['message_count'][$event->rooms['id']]++;
+		if (
+			!empty($event->rooms['type'])
+			&& $event->rooms['type'] == 'direct'
+			&& empty($this->webhook_direct) 
+			) {
+			$this->logger->addInfo(__FILE__.": ".__METHOD__.": room is direct and webhook_direct is false");
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return false;
+		}
+		if (
+			$webhook_message['resource'] == 'memberships' 
+			&& $webhook_message['event'] == 'created'
+			&& $webhook_message['data']['personId'] == $this->me['id']
+			&& !empty($event->rooms)
+			) {
+			if ($this->new_room_announce) {
+				if ($this->default_enabled_room)
+						$text = "I'm ready to go. /help to get started."; 
+				else {
+					$text = "An admin needs to enable me with /bot/on. Here are my admins: ";
+					foreach ($this->admins as $admin) {
+						if (!empty(in_array($admin, $this->super_admins))) $text .= $admin."*, ";
+						else $text .= $admin.", ";
+					}
+					$text = rtrim($text, ', ');
+				}
+				$this->messages('POST', [ 'roomId' => $event->rooms['id'], 'text' => $text ]);
+			}
+			if (!empty($this->bot_triggers['newroom']['enabled']['callbacks'])) {
+				foreach ($this->bot_triggers['newroom']['enabled']['callbacks'] as $callback) {
+					if ($this->multithreaded) {
+						$this->worker_pool->submit(
+							new Callback($callback, $this, $this->logger, $this->storage, $this->extensions, $event)
+							);
+					} else {
+						$callback($this, $this->logger, $this->storage, $this->extensions, $event);
+					}
+				}
+			}
+		}
+		if (
+			$webhook_message['resource'] == 'messages' 
+			&& $webhook_message['event'] == 'created'
+			&& !empty($event->rooms['id'])
+			) {
+			$this->storage->temp['message_count'][$event->rooms['id']] = (empty($this->storage->temp['message_count'][$event->rooms['id']])) ? 0 : $this->storage->temp['message_count'][$event->rooms['id']]+1;
+		}
 		foreach ($params['callbacks'] as $callback) {
 			$callback($this, $this->logger, $this->storage, $this->extensions, $event);
 		}
 
+		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 	}
 
 	protected function prepare_webhook_target_url($method, $params) {
@@ -2958,7 +2994,7 @@ class Spark {
 	public function clear_observation($event) {
 		$return = false;
 		if (!empty($event->messages['id'])) {
-			$return = $this->messages('DELETE', array('messageId'));
+			$return = $this->messages('DELETE', array('messageId' => $event->messages['id']));
 		}
 		return $return;
 	}
@@ -3275,7 +3311,8 @@ class Spark {
 	}
 
 	public function observe_hashtag($observations, $help, $functions) {
-		$observations = $this->check_for_observations($observations, true);
+		$observations = $this->check_for_observations($observations);
+		if (empty($observations)) $observations = ["[a-z0-9]"];
 		$help = $this->check_for_help($help, true);
 		return $this->observe('hashtag', $observations, $help, $functions);
 	}
@@ -3349,18 +3386,21 @@ class Spark {
 
 	public function observe_admincommand($observations, $help, $functions) {
 		$observations = $this->check_for_observations($observations, true);
+		$observations = preg_replace("/\//", '\/', $observations);
 		$help = $this->check_for_help($help, true);
 		return $this->observe('admincommand', $observations, $help, $functions);
 	}
 
 	public function observe_modcommand($observations, $help, $functions) {
 		$observations = $this->check_for_observations($observations, true);
+		$observations = preg_replace("/\//", '\/', $observations);
 		$help = $this->check_for_help($help, true);
 		return $this->observe('modcommand', $observations, $help, $functions);
 	}
 
 	public function observe_command($observations, $help, $functions) {
 		$observations = $this->check_for_observations($observations, true);
+		$observations = preg_replace("/\//", '\/', $observations);
 		$help = $this->check_for_help($help, true);
 		return $this->observe('command', $observations, $help, $functions);
 	}
