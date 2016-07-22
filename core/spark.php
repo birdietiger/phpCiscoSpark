@@ -987,6 +987,11 @@ class Spark {
 			'resource'=>'all',
 			'event'=>'all',
 			);
+		$this->delete_all_webhooks([
+			'name' => '^'.$this->bot_webhook_name_prefix.$this->me['id'].'$',
+			'resource' => '^messages$',
+			'event' => '^created$'
+			]);
 		list($webhook_details, $topic) = $this->does_webhook_exist($params, $this->existing_webhooks);
 		if (empty($webhook_details) || empty($topic)) {
 			if (empty($this->webhooks('POST', $params, false))) {
@@ -2836,7 +2841,7 @@ class Spark {
 				$params['text'] = $this->from_utf16be_to_utf8($params['text']);
 			} else
 				$this->logger->addWarning(__FILE__.": ".__METHOD__.": can't convert \u escaped unicode. compile php with --enable-mbstring or enable mbstring extension");
-		}
+		} else unset($params['text']);
 		$this->logger->addInfo(__FILE__.": ".__METHOD__.": prepared message text");
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 		return $params;
