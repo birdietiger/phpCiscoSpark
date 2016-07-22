@@ -3,6 +3,7 @@
 class Spark {
 
 	protected $bot_triggers;
+	protected $room_before_update;
 	protected $config_file;
 	private $is_cli;
    public $token_file;
@@ -1880,11 +1881,13 @@ class Spark {
 		// check for commands
 		if (!empty($event->messages['text'])) {
 			$any_commands_found = false;
-			$malformed_command = array();
+			$malformed_command = [];
+			$callbacks = [];
 			foreach (array('command', 'modcommand', 'admincommand') as $command_type) {
 				if (($command_type == 'command' || $command_type == 'modcommand') && !empty($room_disabled)) continue;
 				if ($command_type == 'modcommand' && empty($event->memberships['items'][0]['isModerator'])) continue;
 				if ($command_type == 'admincommand' && empty($is_admin)) continue;
+				if (empty($this->bot_triggers[$command_type])) continue;
 				foreach ($this->bot_triggers[$command_type] as $bot_command => $bot_command_params) {
 					if (!empty($this->detect_malformed_commands) && empty($malfromed_command_type)) {
 						if (
@@ -1930,6 +1933,11 @@ class Spark {
 							);
 						if ($this->multithreaded) $this->collect_worker_garbage();
 						foreach ($bot_command_params['callbacks'] as $callback) {
+							if (in_array($callback, $callbacks)) {
+								$this->logger->addInfo(__FILE__.": ".__METHOD__.": this message already triggered callback: $callback");
+								continue;
+							} else
+								$callbacks[] = $callback;
 							$this->report_spark_slow($event->rooms['id']);
 							if ($this->multithreaded && $bot_command != $this->bot_control_command) {
 								$this->worker_pool->submit(
@@ -1943,6 +1951,7 @@ class Spark {
 					}
 				}
 			}
+			unset($callbacks);
 
 			if (!empty($this->detect_malformed_commands) && empty($any_commands_found) && !empty($malformed_command)) {
 
@@ -2015,109 +2024,139 @@ class Spark {
 			}
 
 			if (!empty($this->bot_triggers['hashtag'])) {
+				$event->matches = [];
+				$callbacks = [];
 				foreach ($this->bot_triggers['hashtag'] as $bot_hashtag_string => $bot_hashtag_string_params) {
 					if (preg_match_all("/(#$bot_hashtag_string)([^0-9a-z]|$)/i", $event->messages['text'], $matches)) {
-						$event->matches = $matches[1];
-						//$event->messages['clean_text'] = preg_replace("/#$bot_hashtag_string
-						if ($this->multithreaded) $this->collect_worker_garbage();
-						foreach ($bot_hashtag_string_params['callbacks'] as $callback) {
-							if ($this->multithreaded) {
-								$this->worker_pool->submit(
-									new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
-									);
-							} else {
-								$callback($spark, $logger, $this->storage, $extensions, $event);
-							}
-						}
-						unset($event->matches);
+						$event->matches = array_unique(array_merge($matches[1], $event->matches));
+						$callbacks = array_unique(array_merge($bot_hashtag_string_params['callbacks'], $callbacks));
 					}
 				}
+				if (!empty($event->matches)) {
+					if ($this->multithreaded) $this->collect_worker_garbage();
+					foreach ($callbacks as $callback) {
+						if ($this->multithreaded) {
+							$this->worker_pool->submit(
+								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+								);
+						} else {
+							$callback($spark, $logger, $this->storage, $extensions, $event);
+						}
+					}
+				}
+				unset($event->matches);
+				unset($callbacks);
 			}
 
 			if (!empty($this->bot_triggers['email'])) {
+				$event->matches = [];
+				$callbacks = [];
 				foreach ($this->bot_triggers['email'] as $bot_email => $bot_email_params) {
 					$email_regex = '/(?!(?:(?:\x22?\x5C[\x00-\x7E]\x22?)|(?:\x22?[^\x5C\x22]\x22?)){255,})(?!(?:(?:\x22?\x5C[\x00-\x7E]\x22?)|(?:\x22?[^\x5C\x22]\x22?)){65,}@)(?:(?:[\x21\x23-\x27\x2A\x2B\x2D\x2F-\x39\x3D\x3F\x5E-\x7E]+)|(?:\x22(?:[\x01-\x08\x0B\x0C\x0E-\x1F\x21\x23-\x5B\x5D-\x7F]|(?:\x5C[\x00-\x7F]))*\x22))(?:\.(?:(?:[\x21\x23-\x27\x2A\x2B\x2D\x2F-\x39\x3D\x3F\x5E-\x7E]+)|(?:\x22(?:[\x01-\x08\x0B\x0C\x0E-\x1F\x21\x23-\x5B\x5D-\x7F]|(?:\x5C[\x00-\x7F]))*\x22)))*@(?:(?:(?!.*[^.]{64,})(?:(?:(?:xn--)?[a-z0-9]+(?:-[a-z0-9]+)*\.){1,126}){1,}(?:(?:[a-z][a-z0-9]*)|(?:(?:xn--)[a-z0-9]+))(?:-[a-z0-9]+)*)|(?:\[(?:(?:IPv6:(?:(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){7})|(?:(?!(?:.*[a-f0-9][:\]]){7,})(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){0,5})?::(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){0,5})?)))|(?:(?:IPv6:(?:(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){5}:)|(?:(?!(?:.*[a-f0-9]:){5,})(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){0,3})?::(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){0,3}:)?)))?(?:(?:25[0-5])|(?:2[0-4][0-9])|(?:1[0-9]{2})|(?:[1-9]?[0-9]))(?:\.(?:(?:25[0-5])|(?:2[0-4][0-9])|(?:1[0-9]{2})|(?:[1-9]?[0-9]))){3}))\]))/iD';
 					if (preg_match_all($email_regex, $event->messages['text'], $matches)) {
-						$event->matches = $matches[0];
-						if ($this->multithreaded) $this->collect_worker_garbage();
-						foreach ($bot_email_params['callbacks'] as $callback) {
-							if ($this->multithreaded) {
-								$this->worker_pool->submit(
-									new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
-									);
-							} else {
-								$callback($spark, $logger, $this->storage, $extensions, $event);
-							}
-						}
-						unset($event->matches);
+						$event->matches = array_unique(array_merge($matches[0], $event->matches));
+						$callbacks = array_unique(array_merge($bot_email_params['callbacks'], $callbacks));
 					}
 				}
+				if (!empty($event->matches)) {
+					if ($this->multithreaded) $this->collect_worker_garbage();
+					foreach ($callbacks as $callback) {
+						if ($this->multithreaded) {
+							$this->worker_pool->submit(
+								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+								);
+						} else {
+							$callback($spark, $logger, $this->storage, $extensions, $event);
+						}
+					}
+				}
+				unset($event->matches);
 			}
 
 			if (!empty($this->bot_triggers['phone'])) {
+				$event->matches = [];
+				$callbacks = [];
 				foreach ($this->bot_triggers['phone'] as $bot_phone => $bot_phone_params) {
 					$phone_regex = '/[\(\+]\d[\d\s\-\.\((\)]*\d{2}[\d\s\-\.\(\)]*\d(\s*x\s*\d+)?/i';
 					if (preg_match_all($phone_regex, $event->messages['text'], $matches)) {
-						$event->matches = $matches[0];
-						if ($this->multithreaded) $this->collect_worker_garbage();
-						foreach ($bot_phone_params['callbacks'] as $callback) {
-							if ($this->multithreaded) {
-								$this->worker_pool->submit(
-									new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
-									);
-							} else {
-								$callback($spark, $logger, $this->storage, $extensions, $event);
-							}
-						}
-						unset($event->matches);
+						$event->matches = array_unique(array_merge($matches[0], $event->matches));
+						$callbacks = array_unique(array_merge($bot_phone_params['callbacks'], $callbacks));
 					}
 				}
+				if (!empty($event->matches)) {
+					if ($this->multithreaded) $this->collect_worker_garbage();
+					foreach ($callbacks as $callback) {
+						if ($this->multithreaded) {
+							$this->worker_pool->submit(
+								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+								);
+						} else {
+							$callback($spark, $logger, $this->storage, $extensions, $event);
+						}
+					}
+				}
+				unset($event->matches);
+				unset($callbacks);
 			}
 
 			if (!empty($this->bot_triggers['url'])) {
+				$event->matches = [];
+				$callbacks = [];
 				foreach ($this->bot_triggers['url'] as $bot_url => $bot_url_params) {
 					$url_regex = '_(?:(?:[a-z]+):///?)(?:\S+(?::\S*)?@)?(?:(?!10(?:\.\d{1,3}){3})(?!127(?:\.\d{1,3}){3})(?!169\.254(?:\.\d{1,3}){2})(?!192\.168(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z\x{00a1}-\x{ffff}0-9]+-?)*[a-z\x{00a1}-\x{ffff}0-9]+)(?:\.(?:[a-z\x{00a1}-\x{ffff}0-9]+-?)*[a-z\x{00a1}-\x{ffff}0-9]+)*(?:\.(?:[a-z\x{00a1}-\x{ffff}]{2,})))(?::\d{2,5})?(?:/[^\s]*)?_iuS';
 					if (preg_match_all($url_regex, $event->messages['text'], $matches)) {
-						$event->matches = $matches[0];
-						if ($this->multithreaded) $this->collect_worker_garbage();
-						foreach ($bot_url_params['callbacks'] as $callback) {
-							if ($this->multithreaded) {
-								$this->worker_pool->submit(
-									new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
-									);
-							} else {
-								$callback($spark, $logger, $this->storage, $extensions, $event);
-							}
-						}
-						unset($event->matches);
+						$event->matches = array_unique(array_merge($matches[0], $event->matches));
+						$callbacks = array_unique(array_merge($bot_url_params['callbacks'], $callbacks));
 					}
 				}
+				if (!empty($event->matches)) {
+					if ($this->multithreaded) $this->collect_worker_garbage();
+					foreach ($callbacks as $callback) {
+						if ($this->multithreaded) {
+							$this->worker_pool->submit(
+								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+								);
+						} else {
+							$callback($spark, $logger, $this->storage, $extensions, $event);
+						}
+					}
+				}
+				unset($event->matches);
+				unset($callbacks);
 			}
 
 			if (!empty($this->bot_triggers['search'])) {
+				$event->matches = [];
+				$callbacks = [];
 				foreach ($this->bot_triggers['search'] as $bot_search_string => $bot_search_string_params) {
 					if (preg_match_all("/$bot_search_string/i", $event->messages['text'], $matches)) {
-						$event->matches = $matches[0];
-						if ($this->multithreaded) $this->collect_worker_garbage();
-						foreach ($bot_search_string_params['callbacks'] as $callback) {
-							if ($this->multithreaded) {
-								$this->worker_pool->submit(
-									new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
-									);
-							} else {
-								$callback($spark, $logger, $this->storage, $extensions, $event);
-							}
-						}
-						unset($event->matches);
+						$event->matches = array_unique(array_merge($matches[0], $event->matches));
+						$callbacks = array_unique(array_merge($bot_search_string_params['callbacks'], $callbacks));
 					}
 				}
+				if (!empty($event->matches)) {
+					if ($this->multithreaded) $this->collect_worker_garbage();
+					foreach ($callbacks as $callback) {
+						if ($this->multithreaded) {
+							$this->worker_pool->submit(
+								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+								);
+						} else {
+							$callback($spark, $logger, $this->storage, $extensions, $event);
+						}
+					}
+				}
+				unset($event->matches);
+				unset($callbacks);
 			}
 
 		}
+
 		if (!empty($room_disabled)) {
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return;
 		}
+
 		if (!empty($event->messages['files'])) {
 			foreach ($this->bot_triggers['files'] as $bot_files => $bot_files_string_params) {
 				if ($this->multithreaded) $this->collect_worker_garbage();
@@ -2132,6 +2171,7 @@ class Spark {
 				}
 			}
 		}
+
 		if (!empty($this->bot_triggers['webhook'])) {
 			foreach ($this->bot_triggers['webhook'] as $bot_webhook_resource_event => $bot_webhook_resource_event_params) {
 				list($bot_webhook_resource, $bot_webhook_event) = explode('_', $bot_webhook_resource_event);
@@ -2149,6 +2189,7 @@ class Spark {
 				}
 			}
 		}
+
 		if (!empty($this->bot_triggers['person']) && !empty($event->people['emails'])) {
 			foreach ($this->bot_triggers['person'] as $bot_person_email => $bot_person_params) {
 				if (in_array($bot_person_email, $event->people['emails'])) {
@@ -2165,6 +2206,42 @@ class Spark {
 				}
 			}
 		}
+
+		if (
+			!empty($this->bot_triggers['search'])
+			&& $webhook_message['resource'] == 'rooms' 
+			&& (
+				$webhook_message['event'] == 'created'
+				|| (
+					$webhook_message['event'] == 'updated'
+					&& $this->room_before_update['title'] != $event->rooms['title']
+					)
+				)
+			) {
+			$event->matches = [];
+			$callbacks = [];
+			foreach ($this->bot_triggers['search'] as $bot_search_string => $bot_search_string_params) {
+				if (preg_match_all("/$bot_search_string/i", $event->rooms['title'], $matches)) {
+					$event->matches = array_unique(array_merge($matches[0], $event->matches));
+					$callbacks = array_unique(array_merge($bot_search_string_params['callbacks'], $callbacks));
+				}
+			}
+			if (!empty($event->matches)) {
+				if ($this->multithreaded) $this->collect_worker_garbage();
+				foreach ($callbacks as $callback) {
+					if ($this->multithreaded) {
+						$this->worker_pool->submit(
+							new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+							);
+					} else {
+						$callback($spark, $logger, $this->storage, $extensions, $event);
+					}
+				}
+			}
+			unset($event->matches);
+			unset($callbacks);
+		}
+
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 	}
 
@@ -2569,7 +2646,7 @@ class Spark {
 		if (
 			$webhook_message['resource'] == 'messages' 
 			&& $webhook_message['event'] == 'created'
-			!empty($webhook_message['data']['personEmail'])
+			&& !empty($webhook_message['data']['personEmail'])
 			&& !$this->is_admin(array($webhook_message['data']['personEmail']))
 			&& !empty($webhook_message['data']['roomId'])
 			&& !empty($this->trusted_domains[$webhook_message['data']['roomId']])
@@ -2627,6 +2704,35 @@ class Spark {
 			if (!empty($event->people['id']) && !empty($event->rooms['id'])) {
 				if (empty($event->memberships = $this->memberships('GET', array('roomId' => $event->rooms['id'], 'personId' => $event->people['id']))))
 					$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook memberships resource details: roomId: ".$event->rooms['id']." personId: ".$event->people['id']);
+			}
+		}
+		if (
+			$webhook_message['resource'] == 'memberships' 
+			&& $webhook_message['event'] == 'created'
+			&& $webhook_message['data']['personId'] == $this->me['id']
+			&& (
+				$this->get_room_type == 'all'
+				|| $this->get_room_type == $event->rooms['type']
+				)
+			) {
+			$this->logger->addInfo(__FILE__.": ".__METHOD__.": adding new room to existing_rooms: ".$event->rooms['id']);
+			$this->existing_rooms[$event->rooms['id']] = $event->rooms;
+		}
+		if (!empty($this->existing_rooms[$event->rooms['id']])) {
+			if (
+				$webhook_message['resource'] == 'rooms' 
+				&& $webhook_message['event'] == 'updated'
+				) {
+				$this->logger->addInfo(__FILE__.": ".__METHOD__.": updating room in existing_rooms: ".$event->rooms['id']);
+				$this->room_before_update = $this->existing_rooms[$event->rooms['id']];
+				$this->existing_rooms[$event->rooms['id']] = $event->rooms;
+			} else if (
+				$webhook_message['resource'] == 'memberships' 
+				&& $webhook_message['event'] == 'deleted'
+				&& $webhook_message['data']['personId'] == $this->me['id']
+				) {
+				$this->logger->addInfo(__FILE__.": ".__METHOD__.": deleting room from existing_rooms: ".$event->rooms['id']);
+				unset($this->existing_rooms[$event->rooms['id']]);
 			}
 		}
 		if (
