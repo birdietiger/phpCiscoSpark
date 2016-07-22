@@ -980,18 +980,17 @@ class Spark {
 	protected function create_all_webhooks() {
 		$function_start = \function_start();
 
-		$this->existing_webhooks = $this->get_all_webhooks();
+		$this->existing_webhooks = $this->delete_all_webhooks([
+			'name' => '^'.$this->bot_webhook_name_prefix.$this->me['id'].'$',
+			'resource' => '^messages$',
+			'event' => '^created$'
+			]);
 		$params = array(
 			'name'=>$this->bot_webhook_name_prefix.$this->me['id'],
 			'targetUrl'=>array($this, 'bot_process_webhook'),
 			'resource'=>'all',
 			'event'=>'all',
 			);
-		$this->delete_all_webhooks([
-			'name' => '^'.$this->bot_webhook_name_prefix.$this->me['id'].'$',
-			'resource' => '^messages$',
-			'event' => '^created$'
-			]);
 		list($webhook_details, $topic) = $this->does_webhook_exist($params, $this->existing_webhooks);
 		if (empty($webhook_details) || empty($topic)) {
 			if (empty($this->webhooks('POST', $params, false))) {
@@ -3794,9 +3793,9 @@ class Spark {
 	public function delete_all_webhooks($filters = []) {
 		$function_start = \function_start();
 		if (empty($existing_webhooks = $this->get_all_webhooks())) {
-			$this->logger->addError(__FILE__.": ".__METHOD__.": there are no webhooks");
+			$this->logger->addWarning(__FILE__.": ".__METHOD__.": there are no webhooks");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
+			return [];
 		}
 		foreach ($existing_webhooks as $id => $webhook_details) {
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": checking webhook for deletion: $id");
@@ -3809,11 +3808,13 @@ class Spark {
 				) continue;
 			if (empty($this->webhooks('DELETE', ['webhookId' => $id])))
 				$this->logger->addError(__FILE__.": ".__METHOD__.": failed to delete webhook: $id");
-			else
+			else {
 				$this->logger->addInfo(__FILE__.": ".__METHOD__.": deleted webhook: $id");
+				unset($existing_webhooks[$id]);
+			}
 		}
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-		return true;
+		return $existing_webhooks;
 	}
 
 }
