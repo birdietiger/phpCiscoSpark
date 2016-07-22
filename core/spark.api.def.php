@@ -114,6 +114,9 @@ $spark_endpoints = array(
 						//'showSipAddress' => array(
 						//	'type' => 'boolean',
 						//	),
+						'teamId' => array(
+							'type' => 'id',
+							),
 						'type' => array(
 							'type' => 'string',
 							),
@@ -137,6 +140,9 @@ $spark_endpoints = array(
 						'Content-type' => 'application/json',
 						),
 					'params' => array(
+						'teamId' => array(
+							'type' => 'id',
+							),
 						'title' => array(
 							'type' => 'string',
 							),
@@ -394,6 +400,10 @@ $spark_endpoints = array(
 							'type' => 'string',
 							'max' => 7439,
 							),
+						'markdown' => array(
+							'type' => 'string',
+							'max' => 7439,
+							),
 						'files' => array(
 							'type' => 'url',
 							),
@@ -502,6 +512,9 @@ $spark_endpoints = array(
 						'filter' => array(
 							'type' => 'string',
 							),
+						'secret' => array(
+							'type' => 'string',
+							),
 						),
 					'required' => array(
 						'and' => array(
@@ -509,7 +522,6 @@ $spark_endpoints = array(
 							'targetUrl',
 							'resource',
 							'event',
-							'filter',
 							),
 						'or' => array(
 							),
