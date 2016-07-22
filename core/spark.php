@@ -595,7 +595,7 @@ class Spark {
 							),
 						);
 				}
-				$this->logger->addInfo(__FILE__.": ".__METHOD__.": added callback: ".$params['targetUrl']." to topic: $topic");
+				$this->logger->addInfo(__FILE__.": ".__METHOD__.": added callback: ".$params['targetUrl']." to topic: $new_topic");
 				$this->reload_subscriptions = true;
 			}
 		} else if ($method == 'PUT') {
@@ -1010,7 +1010,7 @@ class Spark {
 							),
 						);
 				}
-				$this->logger->addInfo(__FILE__.": ".__METHOD__.": added callback: ".$params['targetUrl']." to topic: $topic");
+				$this->logger->addInfo(__FILE__.": ".__METHOD__.": added callback: ".$params['targetUrl'][1]." to topic: $topic");
 				$this->reload_subscriptions = true;
 			}
 		}
@@ -2668,10 +2668,10 @@ class Spark {
 		}
 		if (empty($webhook_message['filter'])) $webhook_message['filter'] = null;
 		if (
-			$webhook_message['name'] != $this->existing_webhooks[$webhook_message['id']]['name'] ||
-			$webhook_message['resource'] != $this->existing_webhooks[$webhook_message['id']]['resource'] ||
-			$webhook_message['event'] != $this->existing_webhooks[$webhook_message['id']]['event'] ||
-			$webhook_message['filter'] != $this->existing_webhooks[$webhook_message['id']]['filter'] 
+			$webhook_message['id'] != $this->existing_webhooks[$webhook_message['id']]['id']
+			|| $webhook_message['name'] != $this->existing_webhooks[$webhook_message['id']]['name']
+			|| $webhook_message['created'] != $this->existing_webhooks[$webhook_message['id']]['created']
+			|| $webhook_message['filter'] != $this->existing_webhooks[$webhook_message['id']]['filter'] 
 			) {
 			$this->logger->addError(__FILE__.": ".__METHOD__.": received invalid webhook message. could be malicious: expected: ".json_encode($this->existing_webhooks[$webhook_message['id']])." got: ".json_encode($webhook_message));
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
@@ -3784,6 +3784,31 @@ class Spark {
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 		return $return;
 
+	}
+
+	public function delete_all_webhooks($filters = []) {
+		$function_start = \function_start();
+		if (empty($existing_webhooks = $this->get_all_webhooks())) {
+			$this->logger->addError(__FILE__.": ".__METHOD__.": there are no webhooks");
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return false;
+		}
+		foreach ($existing_webhooks as $id => $webhook_details) {
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": checking webhook for deletion: $id");
+			if (
+				(!empty($filters['name']) && !preg_match("/".str_replace('/', '\/', $filters['name'])."/", $webhook_details['name']))
+				|| (!empty($filters['targetUrl']) && !preg_match("/".str_replace('/', '\/', $filters['targetUrl'])."/", $webhook_details['targetUrl']))
+				|| (!empty($filters['resource']) && !preg_match("/".str_replace('/', '\/', $filters['resource'])."/", $webhook_details['resource']))
+				|| (!empty($filters['event']) && !preg_match("/".str_replace('/', '\/', $filters['event'])."/", $webhook_details['event']))
+				|| (!empty($filters['filter']) && !preg_match("/".str_replace('/', '\/', $filters['filter'])."/", $webhook_details['filter']))
+				) continue;
+			if (empty($this->webhooks('DELETE', ['webhookId' => $id])))
+				$this->logger->addError(__FILE__.": ".__METHOD__.": failed to delete webhook: $id");
+			else
+				$this->logger->addInfo(__FILE__.": ".__METHOD__.": deleted webhook: $id");
+		}
+		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+		return true;
 	}
 
 }
