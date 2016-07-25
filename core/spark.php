@@ -3423,7 +3423,7 @@ class Spark {
 	public function observe_hashtag($observations, $help, $functions) {
 		$observations = $this->check_for_observations($observations);
 		if (empty($observations)) $observations = ["[a-z0-9]"];
-		$help = $this->check_for_help($help, true);
+		$help = $this->check_for_help($help);
 		return $this->observe('hashtag', $observations, $help, $functions);
 	}
 
