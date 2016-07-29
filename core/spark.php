@@ -3,6 +3,7 @@
 class Spark {
 
 	protected $bot_triggers;
+	protected $show_complete_invalid_command = false;
 	protected $room_before_update;
 	protected $config_file;
 	private $is_cli;
@@ -697,7 +698,13 @@ class Spark {
 	protected function get_all_webhooks() {
 		$function_start = \function_start();
 		$existing_webhooks = array();
-		if (!empty($result = $this->webhooks('GET', array('max'=>$this->get_all_number)))) {
+		$result = $this->webhooks('GET', array('max'=>$this->get_all_number));
+		if (!is_array($result)) {
+			$this->logger->addError(__FILE__.": ".__METHOD__.": didn't get all webhooks");
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return false;
+		}
+		if (count($result) > 0) {
 			foreach ($result['items'] as $webhook_details) {
 				if (empty($webhook_details['filter'])) $webhook_details['filter'] = null;
 				$existing_webhooks[$webhook_details['id']] = $webhook_details;
@@ -985,6 +992,11 @@ class Spark {
 			'resource' => '^messages$',
 			'event' => '^created$'
 			]);
+		if ($this->existing_webhooks === false) {
+			$this->logger->addError(__FILE__.": ".__METHOD__.": failed to get webhooks");
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return false;
+		}
 		$params = array(
 			'name'=>$this->bot_webhook_name_prefix.$this->me['id'],
 			'targetUrl'=>array($this, 'bot_process_webhook'),
@@ -1752,7 +1764,12 @@ class Spark {
 			if ($max_command_length < strlen($bot_command_details['label'])) $max_command_length = strlen($bot_command_details['label']);
 		}
 		$text = '';
-		if ($event->command['name'] != 'help') $text = "I'm not sure what you meant with the command, ".$event->command['name'].". ";
+		if ($event->command['name'] != 'help') {
+			if ($this->show_complete_invalid_command)
+				$text = "I'm not sure what you meant with the command, '".$event->messages['text']."'\n";
+			else
+				$text = "I'm not sure what you meant with the command, ".$event->command['name'].". ";
+		}
 		if ($this->direct_help) $text .= "Since you're a moderator, you can use these commands in '".$event->rooms['title']."':\n\n";
 		else $text .= "Since you're a moderator, you can use these commands:\n\n";
 		foreach ($spark->bot_triggers['modcommand'] as $bot_command => $bot_command_details) {
@@ -1790,7 +1807,12 @@ class Spark {
 			if ($max_command_length < strlen($bot_command_details['label'])) $max_command_length = strlen($bot_command_details['label']);
 		}
 		$text = '';
-		if ($event->command['name'] != 'help') $text = "I'm not sure what you meant with the command, ".$event->command['name'].". ";
+		if ($event->command['name'] != 'help') {
+			if ($this->show_complete_invalid_command)
+				$text = "I'm not sure what you meant with the command, '".$event->messages['text']."'\n";
+			else
+				$text = "I'm not sure what you meant with the command, ".$event->command['name'].". ";
+		}
 		if ($this->direct_help) $text .= "Since you're an admin, you can use these commands in '".$event->rooms['title']."':\n\n";
 		else $text .= "Since you're an admin, you can use these commands:\n\n";
 		foreach ($spark->bot_triggers['admincommand'] as $bot_command => $bot_command_details) {
@@ -1828,7 +1850,12 @@ class Spark {
 			if ($max_command_length < strlen($bot_command_details['label'])) $max_command_length = strlen($bot_command_details['label']);
 		}
 		$text = '';
-		if ($event->command['name'] != 'help') $text = "I'm not sure what you meant with the command, ".$event->command['name'].". ";
+		if ($event->command['name'] != 'help') {
+			if ($this->show_complete_invalid_command)
+				$text = "I'm not sure what you meant with the command, '".$event->messages['text']."'\n";
+			else
+				$text = "I'm not sure what you meant with the command, ".$event->command['name'].". ";
+		}
 		if ($this->direct_help) $text .= "You can use the following commands in '".$event->rooms['title']."':\n\n";
 		else $text .= "You can use the following commands:\n\n";
 		$last_text = '';
@@ -3203,6 +3230,9 @@ class Spark {
 		if (!isset($this->config['spark']['webhook_direct']) || !is_bool((bool) $this->config['spark']['webhook_direct'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: webhook_direct");
 		else $this->webhook_direct = (bool) $this->config['spark']['webhook_direct'];
 
+		if (!isset($this->config['spark']['show_complete_invalid_command']) || !is_bool((bool) $this->config['spark']['show_complete_invalid_command'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: show_complete_invalid_command");
+		else $this->show_complete_invalid_command = (bool) $this->config['spark']['show_complete_invalid_command'];
+
 		if (!isset($this->config['spark']['detect_malformed_commands']) || !is_bool((bool) $this->config['spark']['detect_malformed_commands'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: detect_malformed_commands");
 		else $this->detect_malformed_commands = (bool) $this->config['spark']['detect_malformed_commands'];
 
@@ -3792,7 +3822,13 @@ class Spark {
 
 	public function delete_all_webhooks($filters = []) {
 		$function_start = \function_start();
-		if (empty($existing_webhooks = $this->get_all_webhooks())) {
+		$existing_webhooks = $this->get_all_webhooks();
+		if (!is_array($existing_webhooks)) {
+			$this->logger->addError(__FILE__.": ".__METHOD__.": failed to get all webhooks");
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return false;
+		}
+		if (count($existing_webhooks) == 0) {
 			$this->logger->addWarning(__FILE__.": ".__METHOD__.": there are no webhooks");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return [];
