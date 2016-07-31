@@ -39,7 +39,7 @@ class phpMQTT {
 	public $proxy; 			/* holds the socket proxy host	*/
 	public $proxy_port = 80; 			/* holds the socket proxy port	*/
 	private $msgid = 1;			/* counter for message id */
-	public $keepalive = 10;		/* default keepalive timmer */
+	public $keepalive = 30;		/* default keepalive timmer */
 	private $ping_received;		/* host unix time, used to detect disconects */
 	public $topics = array(); 	/* used to store currently subscribed topics */
 	public $debug = false;		/* should output debug messages */
