@@ -2587,7 +2587,7 @@ class Spark {
 						) {
 						$this->logger->addDebug(__FILE__.": ".__METHOD__.": using rooms_people cache for room: ".$params['roomId']." person: ".$params['personId']);
 						$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-						return $this->cache['rooms_people'][$params['roomId']][$params['personId']]['data'];
+						return [ 'items' => [ $this->cache['rooms_people'][$params['roomId']][$params['personId']]['data'] ] ];
 					}
 				}
 			}
@@ -2636,16 +2636,11 @@ class Spark {
 		} else {
 			if (!empty($cacheable)) {
 				if (!empty($data['items'])) {
-					//if ($api == 'memberships') {
-					//	if (!isset($this->cache['rooms_people'])) $this->cache['rooms'] = [];
-					//}
 					foreach ($data['items'] as $item) {
 						$this->logger->addDebug(__FILE__.": ".__METHOD__.": adding to $api cache for ".$item['id']);
 						$this->cache[$api][$item['id']]['data'] = $item;
 						$this->cache[$api][$item['id']]['timestamp'] = time();
 						if ($api == 'memberships') {
-							//if (!isset($this->cache['rooms_people'][$item['roomId']][$item['personId']])) 
-							//	$this->cache['rooms_people'][$item['roomId']][$item['personId']] = [];
 							$this->cache['rooms_people'][$item['roomId']][$item['personId']]['data'] = $item;
 							$this->cache['rooms_people'][$item['roomId']][$item['personId']]['timestamp'] = $timestamp;
 						}
