@@ -266,6 +266,7 @@ class Smartsheet {
       $curl->response_type = 'json';
       $curl->url = $url;
       $curl->success_http_code = '200';
+		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
       if (empty($result = $curl->request())) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from create");
@@ -317,6 +318,7 @@ class Smartsheet {
       $curl->response_type = 'json';
       $curl->url = $url;
       $curl->success_http_code = '200';
+		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
       if (empty($result = $curl->request())) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from create");
@@ -368,6 +370,7 @@ class Smartsheet {
       $curl->response_type = 'json';
       $curl->url = $url;
       $curl->success_http_code = '200';
+		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
       if (empty($result = $curl->request())) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from create");
@@ -426,6 +429,7 @@ class Smartsheet {
       $curl->response_type = 'json';
       $curl->url = $url;
       $curl->success_http_code = '200';
+		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
       if (empty($result = $curl->request())) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from create");
@@ -485,6 +489,7 @@ class Smartsheet {
       $curl->response_type = 'json';
       $curl->url = $url;
       $curl->success_http_code = '200';
+		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
       if (empty($result = $curl->request())) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from create");
@@ -544,6 +549,7 @@ class Smartsheet {
       $curl->response_type = 'json';
       $curl->url = $url;
       $curl->success_http_code = '200';
+		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
       if (empty($result = $curl->request())) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from create");
@@ -586,6 +592,7 @@ class Smartsheet {
       $curl->response_type = 'json';
       $curl->url = $url;
       $curl->success_http_code = '200';
+		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
       if (empty($result = $curl->request())) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get publish");
@@ -640,6 +647,7 @@ class Smartsheet {
       $curl->response_type = 'json';
       $curl->url = $url;
       $curl->success_http_code = '200';
+		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
       if (empty($result = $curl->request())) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from shares");
@@ -693,6 +701,7 @@ class Smartsheet {
       $curl->response_type = 'json';
       $curl->url = $url;
       $curl->success_http_code = '200';
+		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
       if (empty($result = $curl->request())) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from publish");
@@ -777,6 +786,7 @@ class Smartsheet {
       $curl->response_type = 'json';
       $curl->url = $url;
       $curl->success_http_code = '200';
+		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
       if (empty($result = $curl->request())) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from update rows");
@@ -821,6 +831,7 @@ class Smartsheet {
       $curl->response_type = 'json';
       $curl->url = $url;
       $curl->success_http_code = '200';
+		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
       if (empty($result = $curl->request())) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get folders");
@@ -1034,6 +1045,7 @@ class Smartsheet {
       $curl->response_type = 'json';
       $curl->url = $url;
       $curl->success_http_code = '200';
+		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
       if (empty($result = $curl->request())) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get home content");
@@ -1073,6 +1085,7 @@ class Smartsheet {
       $curl->response_type = 'json';
       $curl->url = $url;
       $curl->success_http_code = '200';
+		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
       if (empty($result = $curl->request())) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get sheets");
@@ -1120,6 +1133,7 @@ class Smartsheet {
       $curl->response_type = 'json';
       $curl->url = $url;
       $curl->success_http_code = '200';
+		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
       if (empty($result = $curl->request())) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get sheets");
@@ -1165,6 +1179,7 @@ class Smartsheet {
       $curl->response_type = 'json';
       $curl->url = $url;
       $curl->success_http_code = '200';
+		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
       if (empty($result = $curl->request())) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get folders");
@@ -1206,6 +1221,7 @@ class Smartsheet {
       $curl->response_type = 'json';
       $curl->url = $url;
       $curl->success_http_code = '200';
+		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
       if (empty($result = $curl->request())) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get workspaces");
@@ -1255,6 +1271,7 @@ class Smartsheet {
       $curl->response_type = 'json';
       $curl->url = $url;
       $curl->success_http_code = '200';
+		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
       if (empty($result = $curl->request())) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get folders");
@@ -1305,6 +1322,7 @@ class Smartsheet {
       $curl->response_type = 'json';
       $curl->url = $url;
       $curl->success_http_code = '200';
+		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
       if (empty($result = $curl->request())) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get_rows");
@@ -1376,6 +1394,7 @@ class Smartsheet {
       $curl->response_type = 'json';
       $curl->url = $url;
       $curl->success_http_code = '200';
+		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
       if (empty($result = $curl->request())) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get_columns");
@@ -1456,6 +1475,7 @@ class Smartsheet {
       $curl->response_type = 'json';
       $curl->url = $url;
       $curl->success_http_code = '200';
+		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
       if (empty($result = $curl->request())) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from add row");
