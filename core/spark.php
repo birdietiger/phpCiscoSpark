@@ -2744,7 +2744,7 @@ class Spark {
 			}
 			if (
 				$webhook_message['resource'] == 'memberships'
-				&& !empty($this->cache['rooms_people'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']]['data'])
+				&& !empty($this->cache['rooms_people'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']])
 				) {
 				$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache for rooms_people room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
 				unset($this->cache['rooms_people'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']]);
