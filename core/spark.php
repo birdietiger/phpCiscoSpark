@@ -2738,9 +2738,9 @@ class Spark {
 			$this->enable_cache
 			&& ($webhook_message['event'] == 'deleted' || $webhook_message['event'] == 'updated')
 			) {
-			if (!empty($this->cache[$webhook_message['resource']][$webhook_message['data']['id']]['data'])) {
-				$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache for $api $id");
-				unset($this->cache[$api][$id]);
+			if (!empty($this->cache[$webhook_message['resource']][$webhook_message['data']['id']])) {
+				$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache for ".$webhook_message['resource']." ".$webhook_message['data']['id']);
+				unset($this->cache[$webhook_message['resource']][$webhook_message['data']['id']]);
 			}
 			if (
 				$webhook_message['resource'] == 'memberships'
