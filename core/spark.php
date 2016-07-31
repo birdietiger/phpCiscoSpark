@@ -3,6 +3,8 @@
 class Spark {
 
 	protected $bot_triggers;
+	protected $enable_cache = true;
+	protected $cache_expires_in = 3600;
 	protected $show_complete_invalid_command = false;
 	protected $room_before_update;
 	protected $config_file;
@@ -33,9 +35,8 @@ class Spark {
 	public $me;
 	protected $registered_shutdown_function = false;
 	protected $existing_webhooks;
-	protected $webhook_target_topic = '[email]/webhooks/';
+	protected $webhook_target_topic = '/data/[email]/spark/webhooks/[id]';
 	protected $get_all_number = 100000;
-	protected $bot_trigger_prefix = 'ciscosparkbot';
 	protected $bot_trigger_types = array(
 		'phone', 'url', 'email', 'hashtag', 'every', 'at', 'person', 'command', 'webhook', 'search', 'mqtt', 'ipc', 'modcommand', 'admincommand', 'files'
 		);
@@ -45,6 +46,8 @@ class Spark {
 		'garbage' => 500000, // usecs
 		'token' => 1800, // secs
 		'storage' => 10, // secs
+		'clean_cache' => 300, // secs
+		'save_cache' => 1200, // secs
 		);
 	protected $reload_subscriptions = false;
 	public $enabled_rooms = array();
@@ -315,6 +318,8 @@ class Spark {
 		$next_garbage_check = microtime(true)*1000000 + $this->loop_timers['garbage'];
 		$next_storage_check = time() + $this->loop_timers['storage'];
 		$next_timer_check = time() + 1; // not needed unless support for usec timer is added
+		$next_clean_cache_check = time() + $this->loop_timers['clean_cache'];
+		$next_save_cache_check = time() + $this->loop_timers['save_cache'];
 
 		if ($this->multithreaded) {
 			$this->threads = get_cores() * floor($this->overclock);
@@ -340,6 +345,18 @@ class Spark {
 			if ($next_storage_check <= time()) {
 				$this->storage->save();
 				$next_storage_check = time() + $this->loop_timers['storage'];
+			}
+
+			//clean up and then save cache
+			if ($this->enable_cache) {
+				if ($next_clean_cache_check <= time()) {
+					$this->clean_cache();
+					$next_clean_cache_check = time() + $this->loop_timers['clean_cache'];
+				}
+				if ($next_save_cache_check <= time()) {
+					$this->save_cache();
+					$next_save_cache_check = time() + $this->loop_timers['save_cache'];
+				}
 			}
 
 			// keep tokens fresh
@@ -765,8 +782,8 @@ class Spark {
 
 		$this->bot = true;
 		$this->storage->me = $this->me;
-		$this->storage->perm['last_seen'] = array();
-		$this->storage->temp['message_count'] = array();
+		if (!isset($this->storage->perm['last_seen'])) $this->storage->perm['last_seen'] = array();
+		if (!isset($this->storage->perm['message_count'])) $this->storage->perm['message_count'] = array();
 
 		$this->set_default_bot_commands();
 
@@ -1766,22 +1783,22 @@ class Spark {
 		$text = '';
 		if ($event->command['name'] != 'help') {
 			if ($this->show_complete_invalid_command)
-				$text = "I'm not sure what you meant with the command, '".$event->messages['text']."'\n";
+				$text = "I'm not sure what you meant with the command, **".$event->messages['text']."**\n\n";
 			else
-				$text = "I'm not sure what you meant with the command, ".$event->command['name'].". ";
+				$text = "I'm not sure what you meant with the command, **".$event->command['name']."**. ";
 		}
-		if ($this->direct_help) $text .= "Since you're a moderator, you can use these commands in '".$event->rooms['title']."':\n\n";
-		else $text .= "Since you're a moderator, you can use these commands:\n\n";
+		if ($this->direct_help) $text .= "Since you're a **moderator**, you can use these commands in **".$event->rooms['title']."**\n\n";
+		else $text .= "Since you're a **moderator**, you can use these commands\n\n";
 		foreach ($spark->bot_triggers['modcommand'] as $bot_command => $bot_command_details) {
 			if (empty($bot_command_details['label'])) continue;
 			$spacer_length = $max_command_length - strlen($bot_command_details['label']);
 			$spacer = '';
 			for ($i=0; $i<$spacer_length; $i++) $spacer .= ' ';
 			$description = (!empty($bot_command_details['description'])) ? $bot_command_details['description'] : '';
-			$text .= $bot_command_details['label'].$spacer."\t".$description."\n";
+			$text .= '> `'.$bot_command_details['label'].'`'.$spacer."\t".$description."\n\n";
 		}
-		if ($this->direct_help) $post_result = $spark->messages('POST', array('toPersonId' => $event->people['id'], 'text' => $text));
-		else $post_result = $spark->messages('POST', array('roomId' => $event->messages['roomId'], 'text' => $text));
+		if ($this->direct_help) $post_result = $spark->messages('POST', array('toPersonId' => $event->people['id'], 'markdown' => $text));
+		else $post_result = $spark->messages('POST', array('roomId' => $event->messages['roomId'], 'markdown' => $text));
 		if (empty($post_result))
 			$this->logger->addError(__FILE__.": ".__METHOD__.": failed to post help message");
 		else {
@@ -1809,22 +1826,22 @@ class Spark {
 		$text = '';
 		if ($event->command['name'] != 'help') {
 			if ($this->show_complete_invalid_command)
-				$text = "I'm not sure what you meant with the command, '".$event->messages['text']."'\n";
+				$text = "I'm not sure what you meant with the command, **".$event->messages['text']."**\n\n";
 			else
-				$text = "I'm not sure what you meant with the command, ".$event->command['name'].". ";
+				$text = "I'm not sure what you meant with the command, **".$event->command['name']."**. ";
 		}
-		if ($this->direct_help) $text .= "Since you're an admin, you can use these commands in '".$event->rooms['title']."':\n\n";
-		else $text .= "Since you're an admin, you can use these commands:\n\n";
+		if ($this->direct_help) $text .= "Since you're an **admin**, you can use these commands in **".$event->rooms['title']."**\n\n";
+		else $text .= "Since you're an **admin**, you can use these commands:\n\n";
 		foreach ($spark->bot_triggers['admincommand'] as $bot_command => $bot_command_details) {
 			if (empty($bot_command_details['label'])) continue;
 			$spacer_length = $max_command_length - strlen($bot_command_details['label']);
 			$spacer = '';
 			for ($i=0; $i<$spacer_length; $i++) $spacer .= ' ';
 			$description = (!empty($bot_command_details['description'])) ? $bot_command_details['description'] : '';
-			$text .= $bot_command_details['label'].$spacer."\t".$description."\n";
+			$text .= '> `'.$bot_command_details['label'].'`'.$spacer."\t".$description."\n\n";
 		}
-		if ($this->direct_help) $post_result = $spark->messages('POST', array('toPersonId' => $event->people['id'], 'text' => $text));
-		else $post_result = $spark->messages('POST', array('roomId' => $event->messages['roomId'], 'text' => $text));
+		if ($this->direct_help) $post_result = $spark->messages('POST', array('toPersonId' => $event->people['id'], 'markdown' => $text));
+		else $post_result = $spark->messages('POST', array('roomId' => $event->messages['roomId'], 'markdown' => $text));
 		if (empty($post_result))
 			$this->logger->addError(__FILE__.": ".__METHOD__.": failed to post help message");
 		else {
@@ -1852,11 +1869,11 @@ class Spark {
 		$text = '';
 		if ($event->command['name'] != 'help') {
 			if ($this->show_complete_invalid_command)
-				$text = "I'm not sure what you meant with the command, '".$event->messages['text']."'\n";
+				$text = "I'm not sure what you meant with the command, **".$event->messages['text']."**\n\n";
 			else
-				$text = "I'm not sure what you meant with the command, ".$event->command['name'].". ";
+				$text = "I'm not sure what you meant with the command, **".$event->command['name']."**. ";
 		}
-		if ($this->direct_help) $text .= "You can use the following commands in '".$event->rooms['title']."':\n\n";
+		if ($this->direct_help) $text .= "You can use the following commands in **".$event->rooms['title']."**\n\n";
 		else $text .= "You can use the following commands:\n\n";
 		$last_text = '';
 		foreach ($spark->bot_triggers['command'] as $bot_command => $bot_command_details) {
@@ -1865,20 +1882,20 @@ class Spark {
 			$spacer = '';
 			for ($i=0; $i<$spacer_length; $i++) $spacer .= ' ';
 			$description = (!empty($bot_command_details['description'])) ? $bot_command_details['description'] : '';
-			if (preg_match("/^".$spark->bot_control_command."\//", $bot_command_details['label']) > 0) $last_text .= $bot_command_details['label'].$spacer."\t".$description."\n";
-			else $text .= $bot_command_details['label'].$spacer."\t".$description."\n";
+			if (preg_match("/^".$spark->bot_control_command."\//", $bot_command_details['label']) > 0) $last_text .= '> `'.$bot_command_details['label'].'`'.$spacer."\t".$description."\n\n";
+			else $text .= '> `'.$bot_command_details['label'].'`'.$spacer."\t".$description."\n\n";
 		}
 		if (!empty($event->memberships['items'][0]['isModerator']) && !empty($spark->bot_triggers['modcommand'])) {
 			$description = (!empty($spark->bot_triggers['modcommand']['help\/mod']['description'])) ? $spark->bot_triggers['modcommand']['help\/mod']['description'] : '';
-			$text .= $spark->bot_triggers['modcommand']['help\/mod']['label'].$spacer."\t".$description."\n";
+			$text .= '> `'.$spark->bot_triggers['modcommand']['help\/mod']['label'].'`'.$spacer."\t".$description."\n\n";
 		}
 		if ($spark->is_admin($event->people['emails'])) {
 			$description = (!empty($spark->bot_triggers['admincommand']['help\/admin']['description'])) ? $spark->bot_triggers['admincommand']['help\/admin']['description'] : '';
-			$text .= $spark->bot_triggers['admincommand']['help\/admin']['label'].$spacer."\t".$description."\n";
+			$text .= '> `'.$spark->bot_triggers['admincommand']['help\/admin']['label'].'`'.$spacer."\t".$description."\n\n";
 		}
 		$text .= $last_text;
-		if ($this->direct_help) $post_result = $spark->messages('POST', array('toPersonId' => $event->people['id'], 'text' => $text));
-		else $post_result = $spark->messages('POST', array('roomId' => $event->messages['roomId'], 'text' => $text));
+		if ($this->direct_help) $post_result = $spark->messages('POST', array('toPersonId' => $event->people['id'], 'markdown' => $text));
+		else $post_result = $spark->messages('POST', array('roomId' => $event->messages['roomId'], 'markdown' => $text));
 		if (empty($post_result))
 			$logger->addError(__FILE__.": ".__METHOD__.": failed to post help message");
 		else {
@@ -2322,7 +2339,7 @@ class Spark {
 		$function_start = \function_start();
 		$search = array('[id]', '[email]');
 		$replace = array($id, $email);
-		$topic = str_replace($search, $replace, $this->webhook_target_topic);
+		$topic = str_replace($search, $replace, '+'.$this->webhook_target_topic);
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 		return $topic;
 	}
@@ -2544,12 +2561,38 @@ class Spark {
       foreach (array_keys($this->spark_endpoints[$this->message_version][$api]) as $api_path) {
          if (preg_match("/\/{([^}]+)}/", $api_path, $matches) > 0) {
 				if (!empty($params[$matches[1]])) {
+					$id = $params[$matches[1]];
 					unset($params[$matches[1]]);
 				}
 				break;
 			}
       }
 		$curl->params = null;
+
+		if ($this->enable_cache) {
+			if ($method == 'GET') {
+				$cacheable = true;
+				if (!empty($id)) {
+					if (!empty($this->cache[$api][$id]['data'])) {
+						$this->logger->addInfo(__FILE__.": ".__METHOD__.": using $api cache for $id");
+						$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+						return $this->cache[$api][$id]['data'];
+					}
+				} else {
+					if (
+						$api == 'memberships'
+						&& !empty($params['roomId'])
+						&& !empty($params['personId'])
+						&& !empty($this->cache['rooms_people'][$params['roomId']][$params['personId']]['data'])
+						) {
+						$this->logger->addDebug(__FILE__.": ".__METHOD__.": using rooms_people cache for room: ".$params['roomId']." person: ".$params['personId']);
+						$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+						return $this->cache['rooms_people'][$params['roomId']][$params['personId']]['data'];
+					}
+				}
+			}
+		}
+
 		if (!empty($params)) {
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": before encode params: ".serialize($params));
 			if ($method == 'GET') {
@@ -2591,6 +2634,28 @@ class Spark {
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return false;
 		} else {
+			if (!empty($cacheable)) {
+				if (!empty($data['items'])) {
+					//if ($api == 'memberships') {
+					//	if (!isset($this->cache['rooms_people'])) $this->cache['rooms'] = [];
+					//}
+					foreach ($data['items'] as $item) {
+						$this->logger->addDebug(__FILE__.": ".__METHOD__.": adding to $api cache for ".$item['id']);
+						$this->cache[$api][$item['id']]['data'] = $item;
+						$this->cache[$api][$item['id']]['timestamp'] = time();
+						if ($api == 'memberships') {
+							//if (!isset($this->cache['rooms_people'][$item['roomId']][$item['personId']])) 
+							//	$this->cache['rooms_people'][$item['roomId']][$item['personId']] = [];
+							$this->cache['rooms_people'][$item['roomId']][$item['personId']]['data'] = $item;
+							$this->cache['rooms_people'][$item['roomId']][$item['personId']]['timestamp'] = $timestamp;
+						}
+					}
+				} else if (!empty($id)) {
+					$this->logger->addDebug(__FILE__.": ".__METHOD__.": adding to $api cache for $id");
+					$this->cache[$api][$id]['data'] = $data;
+					$this->cache[$api][$id]['timestamp'] = time();
+				}
+			}
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return $data;
 		}
@@ -2662,11 +2727,30 @@ class Spark {
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return false;
 		}
+		$this->logger->addDebug(__FILE__.": ".__METHOD__.": webhook message: $message_json");
 		if (empty($webhook_message = json_decode($message_json, true))) {
 			$this->logger->addError(__FILE__.": ".__METHOD__.": webhook message isn't json");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return false;
 		}
+
+		if (
+			$this->enable_cache
+			&& ($webhook_message['event'] == 'deleted' || $webhook_message['event'] == 'updated')
+			) {
+			if (!empty($this->cache[$webhook_message['resource']][$webhook_message['data']['id']]['data'])) {
+				$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache for $api $id");
+				unset($this->cache[$api][$id]);
+			}
+			if (
+				$webhook_message['resource'] == 'memberships'
+				&& !empty($this->cache['rooms_people'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']]['data'])
+				) {
+				$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache for rooms_people room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
+				unset($this->cache['rooms_people'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']]);
+			}
+		}
+
 		if ($webhook_message['resource'] == 'messages' && $webhook_message['event'] == 'created') {
 			if ($webhook_message['data']['personId'] == $this->me['id']) {
 				$this->logger->addDebug(__FILE__.": ".__METHOD__.": skipping message that the bot created");
@@ -2718,11 +2802,17 @@ class Spark {
 		}
 		$event = new StdClass();
 		$event->webhooks = $webhook_message;
+
 		if (
-			!empty($id_name) && 
-			empty($event->$webhook_message['resource'] = $this->$webhook_message['resource']('GET', array($id_name => $webhook_message['data']['id'])))
+			!empty($id_name)
+			&& $webhook_message['event'] != 'deleted'
+			&& empty($event->$webhook_message['resource'] = $this->$webhook_message['resource']('GET', array($id_name => $webhook_message['data']['id'])))
 			) $this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook resource details: id name: $id_name id: ".$webhook_message['data']['id']);
-		if ($this->get_all_webhook_data == true) {
+
+		if (
+			$this->get_all_webhook_data == true
+			&& !empty($event->$webhook_message['resource'])
+			) {
 			$this->logger->addInfo(__FILE__.": ".__METHOD__.": getting all webhook data from all endpoints");
 			foreach ($event->$webhook_message['resource'] as $resource_detail_key => $resource_detail_value) {
 				if (!empty($endpoint_id_names[$resource_detail_key])) {
@@ -2749,7 +2839,10 @@ class Spark {
 			$this->logger->addInfo(__FILE__.": ".__METHOD__.": adding new room to existing_rooms: ".$event->rooms['id']);
 			$this->existing_rooms[$event->rooms['id']] = $event->rooms;
 		}
-		if (!empty($this->existing_rooms[$event->rooms['id']])) {
+		if (
+			!empty($event->rooms['id'])
+			&& !empty($this->existing_rooms[$event->rooms['id']])
+			) {
 			if (
 				$webhook_message['resource'] == 'rooms' 
 				&& $webhook_message['event'] == 'updated'
@@ -2811,7 +2904,7 @@ class Spark {
 			&& $webhook_message['event'] == 'created'
 			&& !empty($event->rooms['id'])
 			) {
-			$this->storage->temp['message_count'][$event->rooms['id']] = (empty($this->storage->temp['message_count'][$event->rooms['id']])) ? 0 : $this->storage->temp['message_count'][$event->rooms['id']]+1;
+			$this->storage->perm['message_count'][$event->rooms['id']] = (!isset($this->storage->perm['message_count'][$event->rooms['id']])) ? 0 : $this->storage->perm['message_count'][$event->rooms['id']]+1;
 		}
 		foreach ($params['callbacks'] as $callback) {
 			$callback($this, $this->logger, $this->storage, $this->extensions, $event);
@@ -3209,7 +3302,7 @@ class Spark {
       if (empty($this->config['spark']['bot_control_command'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: bot_control_command");
       else $this->bot_control_command = $this->config['spark']['bot_control_command'];
 
-      if (!isset($this->config['spark']['ipc_channel_seed']) && strlen($this->config['spark']['ipc_channel_seed']) == 0) $this->logger->addWarning(__FILE__.": missing configuration parameters: ipc_channel_seed");
+      if (empty($this->config['spark']['ipc_channel_seed'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: ipc_channel_seed");
       else $this->ipc_channel_seed = $this->config['spark']['ipc_channel_seed'];
 
       if (empty($this->config['spark']['ipc_channel_psk'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: ipc_channel_psk");
@@ -3229,6 +3322,30 @@ class Spark {
 
 		if (!isset($this->config['spark']['webhook_direct']) || !is_bool((bool) $this->config['spark']['webhook_direct'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: webhook_direct");
 		else $this->webhook_direct = (bool) $this->config['spark']['webhook_direct'];
+
+		if (!isset($this->config['spark']['enable_cache']) || !is_bool((bool) $this->config['spark']['enable_cache'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: enable_cache");
+		else $this->enable_cache = (bool) $this->config['spark']['enable_cache'];
+
+      if (empty($this->config['spark']['cache_expires_in'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: cache_expires_in");
+      else $this->cache_expires_in = $this->config['spark']['cache_expires_in'];
+
+		if (empty($this->config['spark']['cache_file'])) {
+			$this->logger->addWarning(__FILE__.": missing configuration parameters: cache_file");
+			if ($this->enable_cache) $this->logger->addError(__FILE__.": !!! no file to save cache. this will impact bot performance if restarted !!!");
+		} else $this->cache_file = $this->config['spark']['cache_file'];
+
+		if (!empty($this->cache_file)) {
+			if (!empty($settings = $this->load_state_file('cache_file'))) {
+				$this->cache = $settings;
+				if (!empty($this->cache['memberships'])) unset($this->cache['memberships']);
+				/* if (!empty($this->cache['rooms'])) {
+					foreach ($this->cache['rooms'] as $id => $details) {
+						if (!empty($this->cache['rooms'][$id]['memberships'])) unset($this->cache['memberships']);
+						unset($this->cache['memberships']);
+					}
+				} */
+			}
+		}
 
 		if (!isset($this->config['spark']['show_complete_invalid_command']) || !is_bool((bool) $this->config['spark']['show_complete_invalid_command'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: show_complete_invalid_command");
 		else $this->show_complete_invalid_command = (bool) $this->config['spark']['show_complete_invalid_command'];
@@ -3842,7 +3959,7 @@ class Spark {
 				|| (!empty($filters['event']) && !preg_match("/".str_replace('/', '\/', $filters['event'])."/", $webhook_details['event']))
 				|| (!empty($filters['filter']) && !preg_match("/".str_replace('/', '\/', $filters['filter'])."/", $webhook_details['filter']))
 				) continue;
-			if (empty($this->webhooks('DELETE', ['webhookId' => $id])))
+			if (empty($this->webhooks('DELETE', ['webhookId' => $id], false)))
 				$this->logger->addError(__FILE__.": ".__METHOD__.": failed to delete webhook: $id");
 			else {
 				$this->logger->addInfo(__FILE__.": ".__METHOD__.": deleted webhook: $id");
@@ -3851,6 +3968,46 @@ class Spark {
 		}
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 		return $existing_webhooks;
+	}
+
+	protected function save_cache() {
+		$function_start = \function_start();
+
+		if (empty($this->cache_file)) {
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return false;
+		}
+
+		if (empty(file_put_contents($this->cache_file, json_encode($this->cache, JSON_PRETTY_PRINT), LOCK_EX))) {
+			$this->logger->addCritical(__FILE__.": ".__METHOD__.": !!! couldn't write to ".$this->cache_file.", bot can't maintain cache if restarted. !!!");
+			return false;
+		}
+
+		$this->logger->addInfo(__FILE__.": ".__METHOD__.": saved cache");
+		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+		return true;
+	}
+
+	protected function clean_cache() {
+		$function_start = \function_start();
+
+		foreach (array_keys($this->cache) as $api) {
+			if ($api == 'rooms_people') {
+				foreach ($this->cache[$api] as $room_id => $people) {
+					foreach ($people as $person_id => $details) {
+						if ($details['timestamp'] + $this->cache_expires_in <= time()) unset($this->cache[$api][$room_id][$person_id]);
+					}
+				}
+			} else { 
+				foreach ($this->cache[$api] as $id => $details) {
+					if ($details['timestamp'] + $this->cache_expires_in <= time()) unset($this->cache[$api][$id]);
+				}
+			}
+		}
+
+		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+		return true;
+
 	}
 
 }
