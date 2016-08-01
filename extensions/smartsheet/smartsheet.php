@@ -11,17 +11,7 @@ class Smartsheet {
 	protected $sheet_name_max_length = 50;
 	protected $folder_name_max_length = 50;
 	public $config_file;
-	//protected $curl;
-	/*
-	protected $smart_create_sheet_cache = array();
-	protected $smart_create_folder_cache = array();
-	protected $smart_create_workspace_cache = array();
-	protected $search_sheets_cache = array();
-	protected $search_folders_in_workspace_cache = array();
-	protected $search_for_workspaces_cache = array();
-	protected $columns_cache = array();
-	*/
-	protected $cache_expires = -1; // secs
+	protected $cache_expires = 3600; // secs
 
 	public function __construct($logger, $config_file = null, $storage = null) {
 		$function_start = \function_start();
@@ -33,7 +23,6 @@ class Smartsheet {
 			$this->logger->addCritical(__FILE__.": ".__METHOD__.": Curl class is missing. make sure to include Curl handler");
 			exit();
 		}
-		//$this->curl = new Curl($this->logger);
 		$this->load_config();
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 	}
@@ -1419,6 +1408,53 @@ class Smartsheet {
 
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 		return $columns;
+
+	}
+
+	public function delete_rows($sheet_id, $row_ids) {
+		$function_start = \function_start();
+
+		if (empty($this->access_token)) {
+			$this->logger->addError(__FILE__.': '.__METHOD__.": Missing class parameter: access_token");
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return false;
+		}
+		if (strlen($sheet_id) == 0) {
+			$this->logger->addError(__FILE__.': '.__METHOD__.": Missing function parameter: sheet_id");
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return false;
+		}
+		if (empty($row_ids)) {
+			$this->logger->addError(__FILE__.': '.__METHOD__.": Missing function parameter: row_ids");
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return false;
+		}
+
+		$url = "https://api.smartsheet.com/2.0/sheets/".$sheet_id."/rows?ignoreRowsNotFound=true&ids=".implode(',', $row_ids);
+
+		$curl = new Curl($this->logger);//$this->curl;
+      $curl->method = 'DELETE';
+		$curl->headers = array(
+			"Authorization: Bearer ".$this->access_token,
+			"Content-Type: application/json",
+			);
+      $curl->response_type = 'json';
+      $curl->url = $url;
+      $curl->success_http_code = '200';
+		$curl->backoff_codes = array('429', '500', '503');
+      $curl->caller = __FILE__.': '.__METHOD__;
+      if (empty($result = $curl->request())) {
+			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from delete row");
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return false;
+		}
+		if ($result['resultCode'] != 0) {
+			$this->logger->addError(__FILE__.': '.__METHOD__.": failed to delete row: ".$result['message']);
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return false;
+		}
+		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+		return true;
 
 	}
 
