@@ -2642,7 +2642,7 @@ class Spark {
 						$this->cache[$api][$item['id']]['timestamp'] = time();
 						if ($api == 'memberships') {
 							$this->cache['rooms_people'][$item['roomId']][$item['personId']]['data'] = $item;
-							$this->cache['rooms_people'][$item['roomId']][$item['personId']]['timestamp'] = $timestamp;
+							$this->cache['rooms_people'][$item['roomId']][$item['personId']]['timestamp'] = time();
 						}
 					}
 				} else if (!empty($id)) {
