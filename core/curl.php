@@ -3,7 +3,7 @@
 class Curl {
 
 	protected $logger;
-	public $caller;
+	public $caller = '';
 	public $method;
 	public $url;
 	public $success_http_code;
@@ -27,7 +27,7 @@ class Curl {
 	public function request() {
 		$function_start = \function_start();
 
-		if (empty($this->caller)) { $this->logger->addError(__FILE__.": ".__METHOD__.": missing class parameter: caller"); return false; }
+		if (empty($this->caller)) { $this->logger->addWarning(__FILE__.": ".__METHOD__.": missing class parameter: caller"); }
 		if (empty($this->method)) { $this->logger->addError($this->caller.": ".__FILE__.": ".__METHOD__.": missing class parameter: method"); return false; }
 		if (empty($this->url)) { $this->logger->addError($this->caller.": ".__FILE__.": ".__METHOD__.": missing class parameter: url"); return false; }
 		if (empty($this->success_http_code)) { $this->logger->addError($this->caller.": ".__FILE__.": ".__METHOD__.": missing class parameter: success_http_code"); return false; }
