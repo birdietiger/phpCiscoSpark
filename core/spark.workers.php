@@ -63,14 +63,17 @@ class Callback extends Collectable {
 
 		$spark = clone $this->spark;
 		unset($this->spark);
-		$this->extensions->http = $spark->curl = new Curl($this->logger);
+		$spark->curl = new Curl($this->logger);
 
-		$this->storage = call_user_func($this->callback, $spark, $this->logger, $this->storage, $this->extensions, $this->details);
-
-		$spark->curl->close();
-		unset($spark);
-		unset($this->callback);
+		$extensions = clone $this->extensions;
 		unset($this->extensions);
+		$extensions->http = new Curl($this->logger);
+
+		$this->storage = call_user_func($this->callback, $spark, $this->logger, $this->storage, $extensions, $this->details);
+
+		unset($spark);
+		unset($extensions);
+		unset($this->callback);
 
       $this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 		unset($this->logger);
