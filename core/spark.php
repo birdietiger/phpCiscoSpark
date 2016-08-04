@@ -37,9 +37,6 @@ class Spark {
 	protected $existing_webhooks;
 	protected $webhook_target_topic = '/data/[email]/spark/webhooks/[id]';
 	protected $get_all_number = 100000;
-	protected $bot_trigger_types = array(
-		'phone', 'url', 'email', 'hashtag', 'every', 'at', 'person', 'command', 'webhook', 'search', 'mqtt', 'ipc', 'modcommand', 'admincommand', 'files'
-		);
 	protected $bot_webhook_name_prefix = 'phpCiscoSpark BOT for ';
 	protected $loop_timers = array(
 		'sleep' => 100000, // usecs
@@ -2406,14 +2403,14 @@ class Spark {
 		$curl->success_http_code = '200';
 		$curl->caller = __FILE__.': '.__METHOD__;
 		$tokens = $curl->request();
-		$tokens['access_token_timestamp'] = time();
-		$tokens['refresh_token_timestamp'] = time();
 		unset($curl);
 		if (empty($tokens)) {
 			$this->logger->addError(__FILE__.": ".__METHOD__.": failed to get tokens");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return false;
 		} else {
+			$tokens['access_token_timestamp'] = time();
+			$tokens['refresh_token_timestamp'] = time();
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return $tokens;
 		}
@@ -2590,7 +2587,7 @@ class Spark {
 						return [ 'items' => [ $this->cache['rooms_people'][$params['roomId']][$params['personId']]['data'] ] ];
 					}
 				}
-			}
+			} else if ($method == 'POST' || $method == 'PUT') $cacheable = true;
 		}
 
 		if (!empty($params)) {
@@ -2634,6 +2631,7 @@ class Spark {
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return false;
 		} else {
+
 			if (!empty($cacheable)) {
 				if (!empty($data['items'])) {
 					foreach ($data['items'] as $item) {
@@ -2649,10 +2647,16 @@ class Spark {
 					$this->logger->addDebug(__FILE__.": ".__METHOD__.": adding to $api cache for $id");
 					$this->cache[$api][$id]['data'] = $data;
 					$this->cache[$api][$id]['timestamp'] = time();
+				} else if ($method == 'POST' || $method == 'PUT') {
+					$this->logger->addDebug(__FILE__.": ".__METHOD__.": adding to $api cache for ".$data['id']);
+					$this->cache[$api][$data['id']]['data'] = $data;
+					$this->cache[$api][$data['id']]['timestamp'] = time();
 				}
 			}
+
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return $data;
+
 		}
 
 	}
@@ -2729,6 +2733,18 @@ class Spark {
 			return false;
 		}
 
+		if (empty($webhook_message['filter'])) $webhook_message['filter'] = null;
+		if (
+			$webhook_message['id'] != $this->existing_webhooks[$webhook_message['id']]['id']
+			|| $webhook_message['name'] != $this->existing_webhooks[$webhook_message['id']]['name']
+			|| $webhook_message['created'] != $this->existing_webhooks[$webhook_message['id']]['created']
+			|| $webhook_message['filter'] != $this->existing_webhooks[$webhook_message['id']]['filter'] 
+			) {
+			$this->logger->addError(__FILE__.": ".__METHOD__.": received invalid webhook message. could be malicious: expected: ".json_encode($this->existing_webhooks[$webhook_message['id']])." got: ".json_encode($webhook_message));
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return false;
+		}
+
 		if (
 			$this->enable_cache
 			&& ($webhook_message['event'] == 'deleted' || $webhook_message['event'] == 'updated')
@@ -2746,47 +2762,46 @@ class Spark {
 			}
 		}
 
-		if ($webhook_message['resource'] == 'messages' && $webhook_message['event'] == 'created') {
-			if ($webhook_message['data']['personId'] == $this->me['id']) {
-				$this->logger->addDebug(__FILE__.": ".__METHOD__.": skipping message that the bot created");
-				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-				return;
-			}
-		}
 		if (
 			$webhook_message['resource'] == 'messages' 
 			&& $webhook_message['event'] == 'created'
-			&& !empty($webhook_message['data']['personEmail'])
-			&& !$this->is_admin(array($webhook_message['data']['personEmail']))
-			&& !empty($webhook_message['data']['roomId'])
-			&& !empty($this->trusted_domains[$webhook_message['data']['roomId']])
 			) {
+			$this->storage->perm['message_count'][$webhook_message['data']['roomId']] = (!isset($this->storage->perm['message_count'][$webhook_message['data']['roomId']])) ? 0 : $this->storage->perm['message_count'][$webhook_message['data']['roomId']]+1;
 
-			$this->logger->addDebug(__FILE__.": ".__METHOD__.": trusted_domains set, so filtering webhook messages");
-
-			$trusted_domains = $this->trusted_domains[$webhook_message['data']['roomId']];
-
-			$trusted_domain_regex = '/[@\.](';
-			foreach ($trusted_domains as $trusted_domain) $trusted_domain_regex .= preg_quote($trusted_domain, '/').'|';
-			$trusted_domain_regex = rtrim($trusted_domain_regex, '|');
-			$trusted_domain_regex .= ')$/';
-			if (preg_match($trusted_domain_regex, $webhook_message['data']['personEmail']) == 0) {
-				$this->logger->addWarning(__FILE__.": ".__METHOD__.": webhook message personEmail is not a trusted domain: ".$webhook_message['data']['personEmail']);
-				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-				return false;
+			if ($webhook_message['data']['personId'] == $this->me['id']) {
+				if (!empty($this->bot_triggers['botmessage']['enabled']['callbacks']))
+					$this->logger->addDebug(__FILE__.": ".__METHOD__.": botmessage observation set, so parsing message from bot");
+				else {
+					$this->logger->addDebug(__FILE__.": ".__METHOD__.": skipping message that the bot created");
+					$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+					return;
+				}
 			}
+
+			if (
+				!empty($webhook_message['data']['personEmail'])
+				&& !$this->is_admin(array($webhook_message['data']['personEmail']))
+				&& !empty($webhook_message['data']['roomId'])
+				&& !empty($this->trusted_domains[$webhook_message['data']['roomId']])
+				) {
+
+				$this->logger->addDebug(__FILE__.": ".__METHOD__.": trusted_domains set, so filtering webhook messages");
+
+				$trusted_domains = $this->trusted_domains[$webhook_message['data']['roomId']];
+
+				$trusted_domain_regex = '/[@\.](';
+				foreach ($trusted_domains as $trusted_domain) $trusted_domain_regex .= preg_quote($trusted_domain, '/').'|';
+				$trusted_domain_regex = rtrim($trusted_domain_regex, '|');
+				$trusted_domain_regex .= ')$/';
+				if (preg_match($trusted_domain_regex, $webhook_message['data']['personEmail']) == 0) {
+					$this->logger->addWarning(__FILE__.": ".__METHOD__.": webhook message personEmail is not a trusted domain: ".$webhook_message['data']['personEmail']);
+					$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+					return false;
+				}
+			}
+
 		}
-		if (empty($webhook_message['filter'])) $webhook_message['filter'] = null;
-		if (
-			$webhook_message['id'] != $this->existing_webhooks[$webhook_message['id']]['id']
-			|| $webhook_message['name'] != $this->existing_webhooks[$webhook_message['id']]['name']
-			|| $webhook_message['created'] != $this->existing_webhooks[$webhook_message['id']]['created']
-			|| $webhook_message['filter'] != $this->existing_webhooks[$webhook_message['id']]['filter'] 
-			) {
-			$this->logger->addError(__FILE__.": ".__METHOD__.": received invalid webhook message. could be malicious: expected: ".json_encode($this->existing_webhooks[$webhook_message['id']])." got: ".json_encode($webhook_message));
-			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
-		}
+
 		foreach (array_keys($this->spark_endpoints[$this->message_version]) as $api) {
 	      foreach (array_keys($this->spark_endpoints[$this->message_version][$api]) as $api_path) {
    	      if (preg_match("/\/{([^}]+)}/", $api_path, $matches) > 0) {
@@ -2794,7 +2809,9 @@ class Spark {
 					$endpoint_id_names[$matches[1]] = $api;
 				}
    	   }
+
 		}
+
 		$event = new StdClass();
 		$event->webhooks = $webhook_message;
 
@@ -2822,18 +2839,52 @@ class Spark {
 					$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook memberships resource details: roomId: ".$event->rooms['id']." personId: ".$event->people['id']);
 			}
 		}
+
 		if (
 			$webhook_message['resource'] == 'memberships' 
 			&& $webhook_message['event'] == 'created'
 			&& $webhook_message['data']['personId'] == $this->me['id']
-			&& (
-				$this->get_room_type == 'all'
-				|| $this->get_room_type == $event->rooms['type']
-				)
 			) {
-			$this->logger->addInfo(__FILE__.": ".__METHOD__.": adding new room to existing_rooms: ".$event->rooms['id']);
-			$this->existing_rooms[$event->rooms['id']] = $event->rooms;
+
+			if (
+				$this->get_room_type == 'all'
+				|| (
+					!empty($event->rooms['type'])
+					&& $this->get_room_type == $event->rooms['type']
+					)
+				) {
+				$this->logger->addInfo(__FILE__.": ".__METHOD__.": adding new room to existing_rooms: ".$event->rooms['id']);
+				$this->existing_rooms[$event->rooms['id']] = $event->rooms;
+			}
+
+			if ($this->new_room_announce) {
+				if ($this->default_enabled_room)
+						$text = "I'm ready to go. /help to get started."; 
+				else {
+					$text = "An admin needs to enable me with /bot/on. Here are my admins: ";
+					foreach ($this->admins as $admin) {
+						if (!empty(in_array($admin, $this->super_admins))) $text .= $admin."*, ";
+						else $text .= $admin.", ";
+					}
+					$text = rtrim($text, ', ');
+				}
+				$this->messages('POST', [ 'roomId' => $webhook_message['data']['roomId'], 'text' => $text ]);
+			}
+
+			if (!empty($this->bot_triggers['newroom']['enabled']['callbacks'])) {
+				foreach ($this->bot_triggers['newroom']['enabled']['callbacks'] as $callback) {
+					if ($this->multithreaded) {
+						$this->worker_pool->submit(
+							new Callback($callback, $this, $this->logger, $this->storage, $this->extensions, $event)
+							);
+					} else {
+						$callback($this, $this->logger, $this->storage, $this->extensions, $event);
+					}
+				}
+			}
+
 		}
+
 		if (
 			!empty($event->rooms['id'])
 			&& !empty($this->existing_rooms[$event->rooms['id']])
@@ -2854,6 +2905,7 @@ class Spark {
 				unset($this->existing_rooms[$event->rooms['id']]);
 			}
 		}
+
 		if (
 			!empty($event->rooms['type'])
 			&& $event->rooms['type'] == 'direct'
@@ -2863,49 +2915,33 @@ class Spark {
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return false;
 		}
-		if (
-			$webhook_message['resource'] == 'memberships' 
-			&& $webhook_message['event'] == 'created'
-			&& $webhook_message['data']['personId'] == $this->me['id']
-			&& !empty($event->rooms)
-			) {
-			if ($this->new_room_announce) {
-				if ($this->default_enabled_room)
-						$text = "I'm ready to go. /help to get started."; 
-				else {
-					$text = "An admin needs to enable me with /bot/on. Here are my admins: ";
-					foreach ($this->admins as $admin) {
-						if (!empty(in_array($admin, $this->super_admins))) $text .= $admin."*, ";
-						else $text .= $admin.", ";
-					}
-					$text = rtrim($text, ', ');
-				}
-				$this->messages('POST', [ 'roomId' => $event->rooms['id'], 'text' => $text ]);
-			}
-			if (!empty($this->bot_triggers['newroom']['enabled']['callbacks'])) {
-				foreach ($this->bot_triggers['newroom']['enabled']['callbacks'] as $callback) {
-					if ($this->multithreaded) {
-						$this->worker_pool->submit(
-							new Callback($callback, $this, $this->logger, $this->storage, $this->extensions, $event)
-							);
-					} else {
-						$callback($this, $this->logger, $this->storage, $this->extensions, $event);
-					}
-				}
-			}
-		}
+
 		if (
 			$webhook_message['resource'] == 'messages' 
 			&& $webhook_message['event'] == 'created'
-			&& !empty($event->rooms['id'])
+			&& $webhook_message['data']['personId'] == $this->me['id']
+			&& !empty($this->bot_triggers['botmessage']['enabled']['callbacks'])
 			) {
-			$this->storage->perm['message_count'][$event->rooms['id']] = (!isset($this->storage->perm['message_count'][$event->rooms['id']])) ? 0 : $this->storage->perm['message_count'][$event->rooms['id']]+1;
+			foreach ($this->bot_triggers['botmessage']['enabled']['callbacks'] as $callback) {
+				if ($this->multithreaded) {
+					$this->worker_pool->submit(
+						new Callback($callback, $this, $this->logger, $this->storage, $this->extensions, $event)
+						);
+				} else {
+					$callback($this, $this->logger, $this->storage, $this->extensions, $event);
+				}
+			}
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": skipping processing of message that the bot created");
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return;
 		}
+
 		foreach ($params['callbacks'] as $callback) {
 			$callback($this, $this->logger, $this->storage, $this->extensions, $event);
 		}
 
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+
 	}
 
 	protected function prepare_webhook_target_url($method, $params) {
@@ -3536,6 +3572,12 @@ class Spark {
 		$observations = $this->check_for_observations($observations);
 		$help = $this->check_for_help($help);
 		return $this->observe('stop', $observations, $help, $functions);
+	}
+
+	public function observe_botmessage($observations, $help, $functions) {
+		$observations = $this->check_for_observations($observations);
+		$help = $this->check_for_help($help);
+		return $this->observe('botmessage', $observations, $help, $functions);
 	}
 
 	public function observe_newroom($observations, $help, $functions) {
