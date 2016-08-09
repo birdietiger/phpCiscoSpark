@@ -8,6 +8,7 @@ class Spark {
 	protected $show_complete_invalid_command = false;
 	protected $room_before_update;
 	protected $config_file;
+	protected $passive = false;
 	private $is_cli;
    public $token_file;
    public $oauth_provider;
@@ -2535,6 +2536,15 @@ class Spark {
 	protected function spark_api($method, $api, $api_url, $params = null, $access_token = null) {
 		$function_start = \function_start();
 
+		if (
+			$this->passive === true
+			&& ($api != 'webhooks' && $method != 'GET')
+			) {
+			$this->logger->addWarning(__FILE__.": ".__METHOD__.": passive is true and trying to do something that could impact UX");
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return false;
+		}
+
 		if (empty($access_token)) $access_token = $this->tokens['access_token'];
 	
 		if (empty($method)) {
@@ -3343,6 +3353,9 @@ class Spark {
 
 		if (!isset($this->config['spark']['get_all_webhook_data']) || !is_bool((bool) $this->config['spark']['get_all_webhook_data'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: get_all_webhook_data");
 		else $this->get_all_webhook_data = (bool) $this->config['spark']['get_all_webhook_data'];
+
+		if (!isset($this->config['spark']['passive']) || !is_bool((bool) $this->config['spark']['passive'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: passive");
+		else $this->passive = (bool) $this->config['spark']['passive'];
 
 		if (!isset($this->config['spark']['delete_last_help']) || !is_bool((bool) $this->config['spark']['delete_last_help'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: delete_last_help");
 		else $this->delete_last_help = (bool) $this->config['spark']['delete_last_help'];
