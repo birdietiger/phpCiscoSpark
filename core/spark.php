@@ -2846,6 +2846,8 @@ class Spark {
 			&& $webhook_message['data']['personId'] == $this->me['id']
 			) {
 
+			$this->enabled_rooms[$event->rooms['id']] = $this->default_enabled_room;
+
 			if (
 				$this->get_room_type == 'all'
 				|| (
