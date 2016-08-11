@@ -2704,6 +2704,7 @@ class Spark {
 	public function parse_mqtt_message($topic, $message, $params = null) {
 		$function_start = \function_start();
 		$this->logger->addInfo(__FILE__.": ".__METHOD__.": received mqtt message");
+		$this->logger->addDebug(__FILE__.": ".__METHOD__.": mqtt topic: $topic message: $message");
 		if (empty($params['callbacks'])) {
 			$this->logger->addError(__FILE__.": ".__METHOD__.": missing params callbacks");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
