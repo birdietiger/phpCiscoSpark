@@ -72,8 +72,14 @@ class Callback extends Collectable {
 		unset($this->extensions);
 		$extensions->http = new Curl($this->logger);
 
-      $callback = &$this->callback;
-      if (!empty($return = $callback($spark, $this->logger, $storage, $extensions, $this->details))) $storage = $return;
+
+		if (is_array($this->callback) && is_object($this->callback[0]))
+			$return = &$this->callback[0]->{$this->callback[1]}($spark, $this->logger, $storage, $extensions, $this->details);
+		else {
+			$callback = &$this->callback;
+			$return = $callback($spark, $this->logger, $storage, $extensions, $this->details);
+		}
+		if (!empty($return)) $storage = $return;
 
 		foreach ($spark->config['extensions'] as $extension => $extension_state) {
 			if (!empty($extension_state)) {
