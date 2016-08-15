@@ -7,7 +7,7 @@ class Smartsheet {
 	public $workspace_id;
 	public $template_id;
 	public $folder_id;
-	protected $storage;
+	public $storage;
 	protected $sheet_name_max_length = 50;
 	protected $folder_name_max_length = 50;
 	public $config_file;

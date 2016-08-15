@@ -8,11 +8,9 @@ class Ldap {
 	public $password = '';
 	private $config_file;
 	private $logger;
-	private $storage;
 
-	public function __construct($logger, $config_file = null, $storage = null) {
+	public function __construct($logger, $config_file = null) {
 		$this->config_file = $config_file;
-		$this->storage = $storage;
 		$this->logger = $logger;
 		$this->load_config();
 		if (!$this->connect($this->host, $this->port, $this->username, $this->password)) {

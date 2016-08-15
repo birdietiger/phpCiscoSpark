@@ -451,8 +451,8 @@ class Spark {
 				$this->storage->temp = array_replace_recursive($this->storage->temp, $temp_diff);
 				foreach ($this->config['extensions'] as $extension => $extension_state) {
 					if (!empty($extension_state)) {
-						$extension_diff = array_diff_assoc_recursive($job->storage->$extension, $job->$extension);
-						$this->storage->$extension = array_replace_recursive($this->storage->$extension, $extension_diff);
+						$this->storage->$extension = $job->storage->$extension;
+						unset($job->storage->$extension);
 					}
 				}
 				unset($job->storage);
@@ -1914,12 +1914,17 @@ class Spark {
 
 	public function bot_process_webhook($spark, $logger, $storage, $extensions, $event) {
 		$function_start = \function_start();
-		$is_admin = $this->is_admin(array($event->webhooks['data']['personEmail']));
+		$is_admin = false;
+		if (!empty($event->webhooks['data']['personEmail'])) 
+			$is_admin = $this->is_admin(array($event->webhooks['data']['personEmail']));
 		if (!empty($this->admins) && !empty($event->rooms['id']) && empty($this->enabled_rooms[$event->rooms['id']])) {
 			$this->logger->addWarning(__FILE__.": ".__METHOD__.": there are admins and this room hasn't been enabled");
 			$room_disabled = true;
 			if (!$is_admin) {
-				$this->logger->addWarning(__FILE__.": ".__METHOD__.": room isn't enabled and user isn't an admin: ".$event->webhooks['data']['personEmail']);
+				if (!empty($event->webhooks['data']['personEmail']))
+					$this->logger->addWarning(__FILE__.": ".__METHOD__.": room isn't enabled and user isn't an admin: ".$event->webhooks['data']['personEmail']);
+				else 
+					$this->logger->addWarning(__FILE__.": ".__METHOD__.": room isn't enabled and not an admin generated message");
 				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 				return;
 			}
