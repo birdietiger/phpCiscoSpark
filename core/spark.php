@@ -902,6 +902,10 @@ class Spark {
 	  	  	$this->logger->addInfo(__FILE__.": ".__METHOD__.": adding bot command help/mod");
 			$this->bot_triggers['modcommand']['help\/mod'] = array('callbacks' => array(array($this, 'bot_command_help_mod')), 'description' => 'List of moderator commands', 'label' => '/help/mod');
 		}
+		if (empty($this->bot_triggers['sucommand']['help\/superuser'])) {
+	  	  	$this->logger->addInfo(__FILE__.": ".__METHOD__.": adding bot command help/superuser");
+			$this->bot_triggers['sucommand']['help\/superuser'] = array('callbacks' => array(array($this, 'bot_command_help_superuser')), 'description' => 'List of super user commands', 'label' => '/help/superuser');
+		}
 		if (empty($this->bot_triggers['admincommand']['help\/admin'])) {
 	  	  	$this->logger->addInfo(__FILE__.": ".__METHOD__.": adding bot command help/admin");
 			$this->bot_triggers['admincommand']['help\/admin'] = array('callbacks' => array(array($this, 'bot_command_help_admin')), 'description' => 'List of admin commands', 'label' => '/help/admin');
@@ -1850,6 +1854,50 @@ class Spark {
 		}
 	}
 
+	public function bot_command_help_superuser($spark, $logger, $storage, $extensions, $event) {
+		$function_start = \function_start();
+
+		if (!$event->permissions['superuser']) return false;
+		// order of commands is based on location of functions in file
+		$max_command_length = 0;
+		foreach ($spark->bot_triggers['sucommand'] as $bot_command => $bot_command_details) {
+			if ($max_command_length < strlen($bot_command_details['label'])) $max_command_length = strlen($bot_command_details['label']);
+		}
+		$text = '';
+		if ($event->command['name'] != 'help') {
+			if ($this->show_complete_invalid_command)
+				$text = "I'm not sure what you meant with the command, **".$event->messages['text']."**\n\n";
+			else
+				$text = "I'm not sure what you meant with the command, **".$event->command['name']."**. ";
+		}
+		if ($this->direct_help) $text .= "Since you're a **super user**, you can use these commands in **".$event->rooms['title']."**\n\n";
+		else $text .= "Since you're a **super user**, you can use these commands:\n\n";
+		foreach ($spark->bot_triggers['sucommand'] as $bot_command => $bot_command_details) {
+			if (empty($bot_command_details['label'])) continue;
+			$spacer_length = $max_command_length - strlen($bot_command_details['label']);
+			$spacer = '';
+			for ($i=0; $i<$spacer_length; $i++) $spacer .= ' ';
+			$description = (!empty($bot_command_details['description'])) ? $bot_command_details['description'] : '';
+			$text .= '> `'.$bot_command_details['label'].'`'.$spacer."\t".$description."\n\n";
+		}
+		if ($this->direct_help) $post_result = $spark->messages('POST', array('toPersonId' => $event->people['id'], 'markdown' => $text));
+		else $post_result = $spark->messages('POST', array('roomId' => $event->messages['roomId'], 'markdown' => $text));
+		if (empty($post_result))
+			$this->logger->addError(__FILE__.": ".__METHOD__.": failed to post help message");
+		else {
+			if ($this->delete_last_help && !$this->direct_help) {
+				if (!empty($this->storage->perm['last_seen'][$event->messages['roomId']]['command']['help\/superuser']['messageId']))
+					$this->messages('DELETE', array('messageId' => $this->storage->perm['last_seen'][$event->messages['roomId']]['command']['help\/superuser']['messageId']));
+				$this->storage->perm['last_seen'][$event->messages['roomId']]['command']['help\/superuser']['messageId'] = $post_result['id'];
+			}
+			if (
+				($spark->direct_help && $event->command['name'] == 'help') ||
+				($spark->delete_invalid_commands && $event->command['name'] != 'help')
+				) $spark->messages('DELETE', array('messageId' => $event->webhooks['data']['id']));
+		}
+		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+	}
+
 	public function bot_command_help_admin($spark, $logger, $storage, $extensions, $event) {
 		$function_start = \function_start();
 
@@ -1868,7 +1916,7 @@ class Spark {
 		}
 		if ($this->direct_help) $text .= "Since you're an **admin**, you can use these commands in **".$event->rooms['title']."**\n\n";
 		else $text .= "Since you're an **admin**, you can use these commands:\n\n";
-		foreach ($spark->bot_triggers['admincommand'] as $bot_command => $bot_command_details) {
+		foreach (array_merge($spark->bot_triggers['sucommand'], $spark->bot_triggers['admincommand']) as $bot_command => $bot_command_details) {
 			if (empty($bot_command_details['label'])) continue;
 			$spacer_length = $max_command_length - strlen($bot_command_details['label']);
 			$spacer = '';
@@ -1933,6 +1981,10 @@ class Spark {
 			$text .= '> `'.$spark->bot_triggers['sucommand']['bot\/on']['label'].'`'.$spacer."\t".$description."\n\n";
 			$description = (!empty($spark->bot_triggers['sucommand']['bot\/off']['description'])) ? $spark->bot_triggers['sucommand']['bot\/off']['description'] : '';
 			$text .= '> `'.$spark->bot_triggers['sucommand']['bot\/off']['label'].'`'.$spacer."\t".$description."\n\n";
+			if (count($spark->bot_triggers['sucommand']) > 3) { // /bot/on /bot/off /help/superuser
+				$description = (!empty($spark->bot_triggers['sucommand']['help\/superuser']['description'])) ? $spark->bot_triggers['sucommand']['help\/superuser']['description'] : '';
+				$text .= '> `'.$spark->bot_triggers['sucommand']['help\/superuser']['label'].'`'.$spacer."\t".$description."\n\n";
+			}
 		}
 		$text .= $last_text;
 		if ($this->direct_help) $post_result = $spark->messages('POST', array('toPersonId' => $event->people['id'], 'markdown' => $text));
