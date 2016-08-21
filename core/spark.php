@@ -7,6 +7,7 @@ class Spark {
 	protected $bot_triggers;
 	protected $enable_cache = true;
 	protected $cache_expires_in = 3600;
+	protected $cache_save_in = 1200;
 	protected $show_complete_invalid_command = false;
 	protected $room_before_update;
 	protected $config_file;
@@ -3512,6 +3513,9 @@ class Spark {
 
 		if (!isset($this->config['spark']['enable_cache']) || !is_bool((bool) $this->config['spark']['enable_cache'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: enable_cache");
 		else $this->enable_cache = (bool) $this->config['spark']['enable_cache'];
+
+      if (empty($this->config['spark']['cache_save_in'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: cache_save_in");
+      else $this->loop_timers['save_cache'] = $this->config['spark']['cache_save_in'];
 
       if (empty($this->config['spark']['cache_expires_in'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: cache_expires_in");
       else $this->cache_expires_in = $this->config['spark']['cache_expires_in'];
