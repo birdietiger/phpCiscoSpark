@@ -2,6 +2,8 @@
 
 class Spark {
 
+	public $existing_rooms;
+	public $admins;
 	protected $bot_triggers;
 	protected $enable_cache = true;
 	protected $cache_expires_in = 3600;
@@ -49,9 +51,9 @@ class Spark {
 		);
 	protected $reload_subscriptions = false;
 	public $enabled_rooms = array();
+	public $super_users_room;
 	protected $bot_control_command = 'bot';
 	protected $me_mention_regex;
-	protected $get_all_memberships_number = 1000;
 	public $spark_api_slow_time = 5; // secs
 	protected $spark_api_slow = 0;
 	public $spark_api_slow_max = 30;
@@ -688,7 +690,7 @@ class Spark {
 		return array('', '');
 	}
 
-	protected function get_all_rooms() {
+	public function get_all_rooms() {
 		$function_start = \function_start();
 		$existing_rooms = array();
 		if ($this->get_room_type == 'all')
@@ -890,6 +892,7 @@ class Spark {
 		if (empty($this->bot_triggers['command'])) $this->bot_triggers['command'] = array();
 		if (empty($this->bot_triggers['modcommand'])) $this->bot_triggers['modcommand'] = array();
 		if (empty($this->bot_triggers['admincommand'])) $this->bot_triggers['admincommand'] = array();
+		if (empty($this->bot_triggers['sucommand'])) $this->bot_triggers['sucommand'] = array();
 		if (empty($this->bot_triggers['command']['help'])) {
 	  	  	$this->logger->addInfo(__FILE__.": ".__METHOD__.": adding bot command help");
 			$this->bot_triggers['command']['help'] = array('callbacks' => array(array($this, 'bot_command_help')), 'description' => 'This list of commands', 'label' => '/help');
@@ -902,14 +905,22 @@ class Spark {
 	  	  	$this->logger->addInfo(__FILE__.": ".__METHOD__.": adding bot command help/admin");
 			$this->bot_triggers['admincommand']['help\/admin'] = array('callbacks' => array(array($this, 'bot_command_help_admin')), 'description' => 'List of admin commands', 'label' => '/help/admin');
 		}
-		$this->bot_triggers['admincommand'][$this->bot_control_command.'\/on'] = array(
+		$this->bot_triggers['sucommand'][$this->bot_control_command.'\/on'] = array(
 			'callbacks' => array(array($this, 'bot_command_control_command_on')), 
 			'description' => 'Enable my features in this room.', 
 			'label' => '/'.$this->bot_control_command.'/on'); 
-		$this->bot_triggers['admincommand'][$this->bot_control_command.'\/off'] = array(
+		$this->bot_triggers['sucommand'][$this->bot_control_command.'\/off'] = array(
 			'callbacks' => array(array($this, 'bot_command_control_command_off')), 
 			'description' => 'Disable my features in this room.', 
 			'label' => '/'.$this->bot_control_command.'/off'); 
+		$this->bot_triggers['admincommand'][$this->bot_control_command.'\/superusers\/on'] = array(
+			'callbacks' => array(array($this, 'bot_command_control_command_superusers_on')), 
+			'description' => 'Members of the super users room can enable this bot in new rooms. Only one super users room allowed at a time.',
+			'label' => '/'.$this->bot_control_command.'/superusers/on'); 
+		$this->bot_triggers['admincommand'][$this->bot_control_command.'\/superusers\/off'] = array(
+			'callbacks' => array(array($this, 'bot_command_control_command_superusers_off')), 
+			'description' => 'Disables super user authorization based on room membership.',
+			'label' => '/'.$this->bot_control_command.'/superusers/off'); 
 		$this->bot_triggers['admincommand'][$this->bot_control_command.'\/trust'] = array(
 			'callbacks' => array(array($this, 'bot_command_control_command_trust')), 
 			'description' => "Add a domain that would trigger me to do something.", 
@@ -969,35 +980,6 @@ class Spark {
 		return true;
 
 	}
-
-	/* protected NEW ROOM
-					if ($this->new_room_announce) {
-						if ($this->default_enabled_room)
-	 						$text = "I'm ready to go. /help to get started."; 
-						else {
-							$text = "An admin needs to enable me with /bot/on. Here are my admins: ";
-							foreach ($this->admins as $admin) {
-								if (!empty(in_array($admin, $this->super_admins))) $text .= $admin."*, ";
-								else $text .= $admin.", ";
-							}
-							$text = rtrim($text, ', ');
-						}
-						$this->messages('POST', [ 'roomId' => $room_details['id'], 'text' => $text ]);
-					}
-					if (!empty($this->bot_triggers['newroom']['enabled']['callbacks'])) {
-						$event = new StdClass();
-						$event->rooms = $room_details;
-						foreach ($this->bot_triggers['newroom']['enabled']['callbacks'] as $callback) {
-							if ($this->multithreaded) {
-								$this->worker_pool->submit(
-									new Callback($callback, $this, $this->logger, $this->storage, $this->extensions, $event)
-									);
-							} else {
-								$callback($this, $this->logger, $this->storage, $this->extensions, $event);
-							}
-						}
-			      }
-	*/
 
 	protected function create_all_webhooks() {
 		$function_start = \function_start();
@@ -1685,6 +1667,61 @@ class Spark {
 
 	}
 
+	protected function bot_command_control_command_superusers_on($spark, $logger, $storage, $extensions, $event) {
+		$function_start = \function_start();
+
+		if (empty($this->admins)) {
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return;
+		} else {
+			if (empty($this->super_users_room_file)) {
+				$this->logger->addError(__FILE__.": ".__METHOD__.": missing class parameter: super_users_room_file");
+				$this->logger->addCritical(__FILE__.": ".__METHOD__.": !!! without the super_users_room_file, the bot can't maintain state if restarted. super user room would need to be set again !!!");
+			}
+		}
+
+		if ($this->super_user_room != $event->rooms['id']) {
+			$this->logger->addInfo(__FILE__.": ".__METHOD__.": super user room is changing orig: ".$this->super_user_room." new: ".$event->rooms['id']);
+			$text = '';
+			if (!empty($this->super_user_room)) $text = "Changing super user room from **".$this->super_user_room."** to this room. ";
+			$text = $text."Any users in this room are now considered super users and can enable me in other rooms with /bot/on.";
+			$this->super_user_room = $event->rooms['id'];
+		} else {
+			$this->logger->addInfo(__FILE__.": ".__METHOD__.": no change to super user room");
+			$text = "The members of this room are already super users.";
+		}
+		$this->messages('POST', array('markdown' => $text, 'roomId' => $event->rooms['id']));
+
+		if (!empty($this->super_user_room_file)) $this->save_state_file($this->super_user_room_file, $this->super_user_room);
+
+	}
+
+	protected function bot_command_control_command_superusers_off($spark, $logger, $storage, $extensions, $event) {
+		$function_start = \function_start();
+
+		if (empty($this->admins)) {
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return;
+		} else {
+			if (empty($this->super_users_room_file)) {
+				$this->logger->addError(__FILE__.": ".__METHOD__.": missing class parameter: super_users_room_file");
+				$this->logger->addCritical(__FILE__.": ".__METHOD__.": !!! without the super_users_room_file, the bot can't maintain state if restarted. super user room would need to be unset again !!!");
+			}
+		}
+
+		if (empty($this->super_user_room)) {
+			$text = "No super user room set. There's nothing for me to do.";
+		} else {
+			$this->logger->addInfo(__FILE__.": ".__METHOD__.": removing super user room: ".$this->super_user_room);
+			$text = "Disabling all super users in room **".$this->super_user_room."**.";
+			$this->super_user_room = '';
+		}
+		$this->messages('POST', array('markdown' => $text, 'roomId' => $event->rooms['id']));
+
+		if (!empty($this->super_user_room_file)) $this->save_state_file($this->super_user_room_file, $this->super_user_room);
+
+	}
+
 	protected function bot_command_control_command_on($spark, $logger, $storage, $extensions, $event) {
 		$function_start = \function_start();
 
@@ -1890,6 +1927,11 @@ class Spark {
 		if ($spark->is_admin($event->people['emails'])) {
 			$description = (!empty($spark->bot_triggers['admincommand']['help\/admin']['description'])) ? $spark->bot_triggers['admincommand']['help\/admin']['description'] : '';
 			$text .= '> `'.$spark->bot_triggers['admincommand']['help\/admin']['label'].'`'.$spacer."\t".$description."\n\n";
+		} else if ($event->permissions['super_user']) {
+			$description = (!empty($spark->bot_triggers['sucommand']['bot\/on']['description'])) ? $spark->bot_triggers['sucommand']['bot\/on']['description'] : '';
+			$text .= '> `'.$spark->bot_triggers['sucommand']['bot\/on']['label'].'`'.$spacer."\t".$description."\n\n";
+			$description = (!empty($spark->bot_triggers['sucommand']['bot\/off']['description'])) ? $spark->bot_triggers['sucommand']['bot\/off']['description'] : '';
+			$text .= '> `'.$spark->bot_triggers['sucommand']['bot\/off']['label'].'`'.$spacer."\t".$description."\n\n";
 		}
 		$text .= $last_text;
 		if ($this->direct_help) $post_result = $spark->messages('POST', array('toPersonId' => $event->people['id'], 'markdown' => $text));
@@ -1914,17 +1956,15 @@ class Spark {
 
 	public function bot_process_webhook($spark, $logger, $storage, $extensions, $event) {
 		$function_start = \function_start();
-		$is_admin = false;
-		if (!empty($event->webhooks['data']['personEmail'])) 
-			$is_admin = $this->is_admin(array($event->webhooks['data']['personEmail']));
+		$is_admin = $event->permissions['admin'];
 		if (!empty($this->admins) && !empty($event->rooms['id']) && empty($this->enabled_rooms[$event->rooms['id']])) {
 			$this->logger->addWarning(__FILE__.": ".__METHOD__.": there are admins and this room hasn't been enabled");
 			$room_disabled = true;
-			if (!$is_admin) {
+			if (!$is_admin && !$event->permissions['super_user']) {
 				if (!empty($event->webhooks['data']['personEmail']))
-					$this->logger->addWarning(__FILE__.": ".__METHOD__.": room isn't enabled and user isn't an admin: ".$event->webhooks['data']['personEmail']);
+					$this->logger->addWarning(__FILE__.": ".__METHOD__.": room isn't enabled and user isn't an admin or super user: ".$event->webhooks['data']['personEmail']);
 				else 
-					$this->logger->addWarning(__FILE__.": ".__METHOD__.": room isn't enabled and not an admin generated message");
+					$this->logger->addWarning(__FILE__.": ".__METHOD__.": room isn't enabled and not an admin or super user generated message");
 				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 				return;
 			}
@@ -1934,10 +1974,11 @@ class Spark {
 			$any_commands_found = false;
 			$malformed_command = [];
 			$callbacks = [];
-			foreach (array('command', 'modcommand', 'admincommand') as $command_type) {
+			foreach (array('command', 'modcommand', 'sucommand', 'admincommand') as $command_type) {
 				if (($command_type == 'command' || $command_type == 'modcommand') && !empty($room_disabled)) continue;
 				if ($command_type == 'modcommand' && empty($event->memberships['items'][0]['isModerator'])) continue;
 				if ($command_type == 'admincommand' && empty($is_admin)) continue;
+				if ($command_type == 'sucommand' && empty($is_admin) && !$event->permissions['super_user']) continue;
 				if (empty($this->bot_triggers[$command_type])) continue;
 				foreach ($this->bot_triggers[$command_type] as $bot_command => $bot_command_params) {
 					if (!empty($this->detect_malformed_commands) && empty($malfromed_command_type)) {
@@ -2008,7 +2049,7 @@ class Spark {
 
 				$any_commands_found = true;
 
-				if ($malformed_command['type'] == 'command')
+				if ($malformed_command['type'] == 'command' || $malformed_command['type'] == 'sucommand')
 					$callbacks = $this->bot_triggers['command']['help']['callbacks'];
 				else if ($malformed_command['type'] == 'modcommand')
 					$callbacks = $this->bot_triggers['modcommand']['help\/mod']['callbacks'];
@@ -2208,7 +2249,10 @@ class Spark {
 			return;
 		}
 
-		if (!empty($event->messages['files'])) {
+		if (
+			!empty($event->messages['files'])
+			&& !empty($this->bot_triggers['files'])
+			) {
 			foreach ($this->bot_triggers['files'] as $bot_files => $bot_files_string_params) {
 				if ($this->multithreaded) $this->collect_worker_garbage();
 				foreach ($bot_files_string_params['callbacks'] as $callback) {
@@ -2545,9 +2589,21 @@ class Spark {
 			$this->passive === true
 			&& ($api != 'webhooks' && $method != 'GET')
 			) {
+
 			$this->logger->addWarning(__FILE__.": ".__METHOD__.": passive is true and trying to do something that could impact UX");
-			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
+
+			if (
+				$api == 'memberships'
+				&& $method == 'DELETE'
+				&& !empty($this->cache[$api][$params['membershipId']]['data']['personId'])
+				&& $this->cache[$api][$params['membershipId']]['data']['personId'] == $this->me['id']
+				) {
+				$this->logger->addWarning(__FILE__.": ".__METHOD__.": passive is true, but permitting bot to remove itself from a room");
+			} else {
+				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+				return false;
+			}
+
 		}
 
 		if (empty($access_token)) $access_token = $this->tokens['access_token'];
@@ -2594,12 +2650,24 @@ class Spark {
 					if (
 						$api == 'memberships'
 						&& !empty($params['roomId'])
-						&& !empty($params['personId'])
-						&& !empty($this->cache['rooms_people'][$params['roomId']][$params['personId']]['data'])
 						) {
-						$this->logger->addDebug(__FILE__.": ".__METHOD__.": using rooms_people cache for room: ".$params['roomId']." person: ".$params['personId']);
-						$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-						return [ 'items' => [ $this->cache['rooms_people'][$params['roomId']][$params['personId']]['data'] ] ];
+						if (
+							!empty($params['personId'])
+							&& !empty($this->cache['memberships_room_person'][$params['roomId']][$params['personId']]['data'])
+							) {
+							$this->logger->addDebug(__FILE__.": ".__METHOD__.": using memberships_room_person cache for room: ".$params['roomId']." person: ".$params['personId']);
+							$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+							return [ 'items' => [ $this->cache['memberships_room_person'][$params['roomId']][$params['personId']]['data'] ] ];
+						} else if (
+							count($params) == 2
+							&& !empty($params['max'])
+							&& $params['max'] >= $this->spark_endpoints[$this->message_version]['memberships']['/']['GET']['params']['max']['max']
+							&& !empty($this->cache['memberships_room'][$params['roomId']]['data'])
+							) {
+							$this->logger->addDebug(__FILE__.": ".__METHOD__.": using memberships_room cache for room: ".$params['roomId']);
+							$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+							return [ 'items' => [ $this->cache['memberships_room'][$params['roomId']]['data'] ] ];
+						}
 					}
 				}
 			} else if ($method == 'POST' || $method == 'PUT') $cacheable = true;
@@ -2654,9 +2722,18 @@ class Spark {
 						$this->cache[$api][$item['id']]['data'] = $item;
 						$this->cache[$api][$item['id']]['timestamp'] = time();
 						if ($api == 'memberships') {
-							$this->cache['rooms_people'][$item['roomId']][$item['personId']]['data'] = $item;
-							$this->cache['rooms_people'][$item['roomId']][$item['personId']]['timestamp'] = time();
+							$this->cache['memberships_room_person'][$item['roomId']][$item['personId']]['data'] = $item;
+							$this->cache['memberships_room_person'][$item['roomId']][$item['personId']]['timestamp'] = time();
 						}
+					}
+					if (
+						$api == 'memberships'
+						&& count($params) == 2
+						&& !empty($params['max'])
+						&& $params['max'] >= $this->spark_endpoints[$this->message_version]['memberships']['/']['GET']['params']['max']['max']
+						) {
+						$this->cache['memberships_room'][$item['roomId']]['data'] = $data['items'];
+						$this->cache['memberships_room'][$item['roomId']]['timestamp'] = time();
 					}
 				} else if (!empty($id)) {
 					$this->logger->addDebug(__FILE__.": ".__METHOD__.": adding to $api cache for $id");
@@ -2765,23 +2842,53 @@ class Spark {
 			$this->enable_cache
 			&& ($webhook_message['event'] == 'deleted' || $webhook_message['event'] == 'updated')
 			) {
+
 			if (!empty($this->cache[$webhook_message['resource']][$webhook_message['data']['id']])) {
 				$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache for ".$webhook_message['resource']." ".$webhook_message['data']['id']);
 				unset($this->cache[$webhook_message['resource']][$webhook_message['data']['id']]);
 			}
-			if (
-				$webhook_message['resource'] == 'memberships'
-				&& !empty($this->cache['rooms_people'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']])
-				) {
-				$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache for rooms_people room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
-				unset($this->cache['rooms_people'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']]);
+
+			if ($webhook_message['resource'] == 'memberships') {
+
+				if ($webhook_message['data']['personId'] == $this->me['id']) {
+					if (!empty($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'])) {
+						$this->logger->addDebug(__FILE__.": ".__METHOD__.": bot left room. deleteing all cache for memberships_room room: ".$webhook_message['data']['roomId']);
+						unset($this->cache['memberships_room'][$webhook_message['data']['roomId']]);
+					}
+					if (!empty($this->cache['memberships_room_person'][$webhook_message['data']['roomId']])) {
+						$this->logger->addDebug(__FILE__.": ".__METHOD__.": bot left room. deleteing all cache for memberships_room_person room: ".$webhook_message['data']['roomId']);
+						unset($this->cache['memberships_room_person'][$webhook_message['data']['roomId']]);
+					}
+
+				} else {
+
+					if (!empty($this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']])) {
+						$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache for memberships_room_person room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
+						unset($this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']]);
+					}
+					if (!empty($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'])) {
+						foreach ($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'] as $index => $member) {
+							if ($member['id'] == $webhook_message['data']['personId'])
+								$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache for memberships_room room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
+								unset($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'][$index]);
+						}
+					}
+
+				}
+
 			}
+
 		}
+
+		$event = new StdClass();
+		$event->webhooks = $webhook_message;
+		$event->permissions = [];
 
 		if (
 			$webhook_message['resource'] == 'messages' 
 			&& $webhook_message['event'] == 'created'
 			) {
+
 			$this->storage->perm['message_count'][$webhook_message['data']['roomId']] = (!isset($this->storage->perm['message_count'][$webhook_message['data']['roomId']])) ? 0 : $this->storage->perm['message_count'][$webhook_message['data']['roomId']]+1;
 
 			if ($webhook_message['data']['personId'] == $this->me['id']) {
@@ -2801,7 +2908,7 @@ class Spark {
 				&& !empty($this->trusted_domains[$webhook_message['data']['roomId']])
 				) {
 
-				$this->logger->addDebug(__FILE__.": ".__METHOD__.": trusted_domains set, so filtering webhook messages");
+				$this->logger->addDebug(__FILE__.": ".__METHOD__.": trusted_domains set, so authorizing webhook messages");
 
 				$trusted_domains = $this->trusted_domains[$webhook_message['data']['roomId']];
 
@@ -2813,7 +2920,7 @@ class Spark {
 					$this->logger->addWarning(__FILE__.": ".__METHOD__.": webhook message personEmail is not a trusted domain: ".$webhook_message['data']['personEmail']);
 					$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 					return false;
-				}
+				} else $event->permissions['trusted_domain'] = true;
 			}
 
 		}
@@ -2825,11 +2932,25 @@ class Spark {
 					$endpoint_id_names[$matches[1]] = $api;
 				}
    	   }
-
 		}
 
-		$event = new StdClass();
-		$event->webhooks = $webhook_message;
+		if (
+			!empty($webhook_message['data']['personEmail'])
+			) {
+			$event->permissions['super_user'] = false;
+			$event->permissions['admin'] = false;
+			$event->permissions['super_admin'] = false;
+			if (in_array($admin, $this->admins)) $event->permissions['admin'] = true;
+			if (in_array($admin, $this->super_admins)) $event->permissions['super_admin'] = true;
+			if (!empty($this->super_users_room)) {
+				$this->logger->addDebug(__FILE__.": ".__METHOD__.": super_users_room set, so checking membership");
+				$membership_details = $this->memberships('GET', ['roomId' => $this->super_users_room, 'personEmail' => $webhook_message['data']['personEmail'] ]);
+        		if (!empty($membership_details['items'][0])) {
+					$event->permissions['super_user'] = true;
+					$this->logger->addInfo(__FILE__.": ".__METHOD__.": member of super_users room: ".$webhook_message['data']['personEmail']);
+				}
+			}
+		}
 
 		if (
 			!empty($id_name)
@@ -2879,7 +3000,7 @@ class Spark {
 				if ($this->default_enabled_room)
 						$text = "I'm ready to go. /help to get started."; 
 				else {
-					$text = "An admin needs to enable me with /bot/on. Here are my admins: ";
+					$text = "An admin or super user needs to enable me with /bot/on. Here are my admins: ";
 					foreach ($this->admins as $admin) {
 						if (!empty(in_array($admin, $this->super_admins))) $text .= $admin."*, ";
 						else $text .= $admin.", ";
@@ -2921,6 +3042,8 @@ class Spark {
 				) {
 				$this->logger->addInfo(__FILE__.": ".__METHOD__.": deleting room from existing_rooms: ".$event->rooms['id']);
 				unset($this->existing_rooms[$event->rooms['id']]);
+            if (!empty($this->enabled_rooms[$event->rooms['id']])) unset($this->enabled_rooms[$event->rooms['id']]);
+            if (!empty($this->enabled_rooms_file)) $this->save_state_file($this->enabled_rooms_file, $this->enabled_rooms);
 			}
 		}
 
@@ -3336,6 +3459,18 @@ class Spark {
 				$this->require_mention = $settings;
 		}
 
+      if (empty($this->config['spark']['default_super_users_room'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: default_super_users_room");
+      else $this->super_users_room = $this->config['spark']['default_super_users_room'];
+
+      if (empty($this->config['spark']['super_users_room_file'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: super_users_room_file");
+      else $this->super_users_room_file = $this->config['spark']['super_users_room_file'];
+
+		if (!empty($this->super_users_room_file)) {
+			if (!empty($this->super_users_room)) $this->logger->addInfo(__FILE__.": default super_users room setting: ".json_encode($this->super_users_room));
+			if (!empty($settings = $this->load_state_file('super_users_room_file')))
+				$this->super_users_room = $settings;
+		}
+
       if (!isset($this->config['spark']['default_enabled_room']) || !is_bool((bool) $this->config['spark']['default_enabled_room'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: default_enabled_room");
       else $this->default_enabled_room = (bool) $this->config['spark']['default_enabled_room'];
 
@@ -3389,6 +3524,8 @@ class Spark {
 		if (!empty($this->cache_file)) {
 			if (!empty($settings = $this->load_state_file('cache_file'))) {
 				$this->cache = $settings;
+				if (!empty($this->cache['memberships_room_person'])) unset($this->cache['memberships_room_person']);
+				if (!empty($this->cache['memberships_room'])) unset($this->cache['memberships_room']);
 				if (!empty($this->cache['memberships'])) unset($this->cache['memberships']);
 				/* if (!empty($this->cache['rooms'])) {
 					foreach ($this->cache['rooms'] as $id => $details) {
@@ -3697,6 +3834,13 @@ class Spark {
 		$observations = $this->check_for_observations($observations, true);
 		$help = $this->check_for_help($help);
 		return $this->observe('search', $observations, $help, $functions);
+	}
+
+	public function observe_sucommand($observations, $help, $functions) {
+		$observations = $this->check_for_observations($observations, true);
+		$observations = preg_replace("/\//", '\/', $observations);
+		$help = $this->check_for_help($help, true);
+		return $this->observe('sucommand', $observations, $help, $functions);
 	}
 
 	public function observe_admincommand($observations, $help, $functions) {
@@ -4050,11 +4194,15 @@ class Spark {
 		$function_start = \function_start();
 
 		foreach (array_keys($this->cache) as $api) {
-			if ($api == 'rooms_people') {
+			if ($api == 'memberships_room_person') {
 				foreach ($this->cache[$api] as $room_id => $people) {
 					foreach ($people as $person_id => $details) {
 						if ($details['timestamp'] + $this->cache_expires_in <= time()) unset($this->cache[$api][$room_id][$person_id]);
 					}
+				}
+			} else if ($api == 'memberships_room') {
+				foreach ($this->cache[$api] as $room_id => $details) {
+					if ($details['timestamp'] + $this->cache_expires_in <= time()) unset($this->cache[$api][$room_id]);
 				}
 			} else { 
 				foreach ($this->cache[$api] as $id => $details) {
