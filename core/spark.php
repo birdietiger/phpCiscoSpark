@@ -47,7 +47,7 @@ class Spark {
 		'token' => 1800, // secs
 		'storage' => 10, // secs
 		'clean_cache' => 300, // secs
-		'save_cache' => 1200, // secs
+		'save_cache' => 60, // secs
 		);
 	protected $reload_subscriptions = false;
 	public $enabled_rooms = array();
@@ -2984,6 +2984,7 @@ class Spark {
 			if (!empty($this->cache[$webhook_message['resource']][$webhook_message['data']['id']])) {
 				$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache for ".$webhook_message['resource']." ".$webhook_message['data']['id']);
 				unset($this->cache[$webhook_message['resource']][$webhook_message['data']['id']]);
+				$this->cache_updated = true;
 			}
 
 			if ($webhook_message['resource'] == 'memberships') {
@@ -2992,10 +2993,12 @@ class Spark {
 					if (!empty($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'])) {
 						$this->logger->addDebug(__FILE__.": ".__METHOD__.": bot left room. deleteing all cache for memberships_room room: ".$webhook_message['data']['roomId']);
 						unset($this->cache['memberships_room'][$webhook_message['data']['roomId']]);
+						$this->cache_updated = true;
 					}
 					if (!empty($this->cache['memberships_room_person'][$webhook_message['data']['roomId']])) {
 						$this->logger->addDebug(__FILE__.": ".__METHOD__.": bot left room. deleteing all cache for memberships_room_person room: ".$webhook_message['data']['roomId']);
 						unset($this->cache['memberships_room_person'][$webhook_message['data']['roomId']]);
+						$this->cache_updated = true;
 					}
 
 				} else {
@@ -3003,12 +3006,14 @@ class Spark {
 					if (!empty($this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']])) {
 						$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache for memberships_room_person room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
 						unset($this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']]);
+						$this->cache_updated = true;
 					}
 					if (!empty($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'])) {
 						foreach ($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'] as $index => $member) {
 							if ($member['id'] == $webhook_message['data']['personId'])
 								$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache for memberships_room room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
 								unset($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'][$index]);
+								$this->cache_updated = true;
 						}
 					}
 
@@ -4339,16 +4344,25 @@ class Spark {
 			if ($api == 'memberships_room_person') {
 				foreach ($this->cache[$api] as $room_id => $people) {
 					foreach ($people as $person_id => $details) {
-						if ($details['timestamp'] + $this->cache_expires_in <= time()) unset($this->cache[$api][$room_id][$person_id]);
+						if ($details['timestamp'] + $this->cache_expires_in <= time()) {
+							unset($this->cache[$api][$room_id][$person_id]);
+							$this->cache_updated = true;
+						}
 					}
 				}
 			} else if ($api == 'memberships_room') {
 				foreach ($this->cache[$api] as $room_id => $details) {
-					if ($details['timestamp'] + $this->cache_expires_in <= time()) unset($this->cache[$api][$room_id]);
+					if ($details['timestamp'] + $this->cache_expires_in <= time()) {
+						unset($this->cache[$api][$room_id]);
+						$this->cache_updated = true;
+					}
 				}
 			} else { 
 				foreach ($this->cache[$api] as $id => $details) {
-					if ($details['timestamp'] + $this->cache_expires_in <= time()) unset($this->cache[$api][$id]);
+					if ($details['timestamp'] + $this->cache_expires_in <= time()) {
+						unset($this->cache[$api][$id]);
+						$this->cache_updated = true;
+					}
 				}
 			}
 		}
