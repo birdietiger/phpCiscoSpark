@@ -3513,16 +3513,16 @@ class Spark {
 				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 				return false;
 			}
-			if (!empty($files)) $return = $this->messages('POST', array('text' => $text, 'files' => $files, 'toPersonId' => $event->people['id']));
-			else $return = $this->messages('POST', array('text' => $text, 'toPersonId' => $event->people['id']));
+			if (!empty($files)) $return = $this->messages('POST', array('markdown' => $text, 'files' => $files, 'toPersonId' => $event->people['id']));
+			else $return = $this->messages('POST', array('markdown' => $text, 'toPersonId' => $event->people['id']));
 		} else {
 			if (empty($event->rooms['id'])) {
 				$this->logger->addError(__FILE__.": ".__METHOD__.": missing event parameter: rooms['id']");
 				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 				return false;
 			}
-			if (!empty($files)) $return = $this->messages('POST', array('text' => $text, 'files' => $files, 'roomId' => $event->rooms['id']));
-			else $return = $this->messages('POST', array('text' => $text, 'roomId' => $event->rooms['id']));
+			if (!empty($files)) $return = $this->messages('POST', array('markdown' => $text, 'files' => $files, 'roomId' => $event->rooms['id']));
+			else $return = $this->messages('POST', array('markdown' => $text, 'roomId' => $event->rooms['id']));
 		}
 		return $return;
 	}
@@ -3531,9 +3531,9 @@ class Spark {
 		$return = true;
 		foreach (array_keys($this->enabled_rooms) as $room_id) {
 			if (!empty($files)) {
-				if (empty($this->messages('POST', array('text' => $text, 'files' => $files, 'roomId' => $room_id)))) $return = false;;
+				if (empty($this->messages('POST', array('markdown' => $text, 'files' => $files, 'roomId' => $room_id)))) $return = false;;
 			} else {
-				if (empty($this->messages('POST', array('text' => $text, 'roomId' => $room_id)))) $return = false;;
+				if (empty($this->messages('POST', array('markdown' => $text, 'roomId' => $room_id)))) $return = false;;
 			}
 		}
 		return $return;
@@ -4212,8 +4212,8 @@ class Spark {
 			$this->logger->addError(__FILE__.": ".__METHOD__.": adding participants encountered errors");
 
 		if (!empty($text) || !empty($files)) {
-			if (!empty($files)) $params = [ 'text' => $text, 'files' => $files, 'roomId' => $room_details['id'] ];
-			else $params = [ 'text' => $text, 'roomId' => $room_details['id'] ];
+			if (!empty($files)) $params = [ 'markdown' => $text, 'files' => $files, 'roomId' => $room_details['id'] ];
+			else $params = [ 'markdown' => $text, 'roomId' => $room_details['id'] ];
 			if (empty($this->messages('POST', $params))) {
 				$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't post welcome message");
 			}
