@@ -1010,6 +1010,12 @@ class Spark {
 			'resource' => '^messages$',
 			'event' => '^created$'
 			]);
+		$this->existing_webhooks = $this->delete_all_webhooks([
+			'name' => '^'.$this->bot_webhook_name_prefix.$this->me['id'].'$',
+			'targetUrl' => '^https://api.incis.co/mqtt/\?topic='.$this->me['emails'][0].'/webhooks/$',
+			'resource' => '^all$',
+			'event' => '^all$'
+			]);
 		if ($this->existing_webhooks === false) {
 			$this->logger->addError(__FILE__.": ".__METHOD__.": failed to get webhooks");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
