@@ -1938,7 +1938,7 @@ class Spark {
 	public function bot_command_help_superuser($spark, $logger, $storage, $extensions, $event) {
 		$function_start = \function_start();
 
-		if (!$event->permissions['superuser']) return false;
+		if (empty($event->permissions['admin']) && empty($event->permissions['superuser'])) return false;
 		// order of commands is based on location of functions in file
 		$max_command_length = 0;
 		foreach ($spark->bot_triggers['sucommand'] as $bot_command => $bot_command_details) {
@@ -2157,6 +2157,7 @@ class Spark {
 							'options' => $bot_command_options,
 							'data' => $bot_command_message_data,
 							);
+						$this->logger->addInfo(__FILE__.": ".__METHOD__.": found command: ".json_encode($event->command));
 						if ($this->multithreaded) $this->collect_worker_garbage();
 						foreach ($bot_command_params['callbacks'] as $callback) {
 							if (in_array($callback, $callbacks)) {
