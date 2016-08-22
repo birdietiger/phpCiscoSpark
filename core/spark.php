@@ -134,6 +134,13 @@ class Spark {
 
 		$this->set_bot_triggers();
 		if ($this->bot) $this->set_bot_variables();
+		if ($this->enable_cache && !empty($this->super_user_room)) {
+			$this->logger->addInfo(__FILE__.": ".__METHOD__.": populating super user room cache");
+			$this->memberships('GET', [
+				'roomId' => $this->super_user_room,
+				'max' => $this->spark_endpoints[$this->message_version]['memberships']['/']['GET']['params']['max']['max']
+				]);
+		}
 
 		if (!empty($this->bot_triggers['stop']['enabled']['callbacks'])) {
 			foreach ($this->bot_triggers['stop']['enabled']['callbacks'] as $callback) {
@@ -331,6 +338,8 @@ class Spark {
 			foreach ($this->bot_triggers['start']['enabled']['callbacks'] as $callback)
 				$callback($this, $this->logger, $this->storage, $this->extensions, null);
       }
+
+		$this->save_cache();
 
 		$this->logger->addAlert(__FILE__.": ".__METHOD__.": BOT is running");
 
@@ -3583,12 +3592,7 @@ class Spark {
 				if (!empty($this->cache['memberships_room_person'])) unset($this->cache['memberships_room_person']);
 				if (!empty($this->cache['memberships_room'])) unset($this->cache['memberships_room']);
 				if (!empty($this->cache['memberships'])) unset($this->cache['memberships']);
-				/* if (!empty($this->cache['rooms'])) {
-					foreach ($this->cache['rooms'] as $id => $details) {
-						if (!empty($this->cache['rooms'][$id]['memberships'])) unset($this->cache['memberships']);
-						unset($this->cache['memberships']);
-					}
-				} */
+				$this->clean_cache();
 			}
 		}
 
