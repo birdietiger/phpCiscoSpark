@@ -940,12 +940,16 @@ class Spark {
 			'label' => '/'.$this->bot_control_command.'/superusers/off'); 
 		$this->bot_triggers['admincommand'][$this->bot_control_command.'\/trust'] = array(
 			'callbacks' => array(array($this, 'bot_command_control_command_trust')), 
-			'description' => "Add a domain that would trigger me to do something.", 
+			'description' => "List trusted domains.",
 			'label' => '/'.$this->bot_control_command.'/trust');
-		$this->bot_triggers['admincommand'][$this->bot_control_command.'\/distrust'] = array(
-			'callbacks' => array(array($this, 'bot_command_control_command_distrust')), 
+		$this->bot_triggers['admincommand'][$this->bot_control_command.'\/trust\/add'] = array(
+			'callbacks' => array(array($this, 'bot_command_control_command_trust_add')), 
+			'description' => "Add a domain that would trigger me to do something.", 
+			'label' => '/'.$this->bot_control_command.'/trust/add');
+		$this->bot_triggers['admincommand'][$this->bot_control_command.'\/trust\/remove'] = array(
+			'callbacks' => array(array($this, 'bot_command_control_command_trust_remove')), 
 			'description' => "Remove a domain that that would trigger me to do something.",
-			'label' => '/'.$this->bot_control_command.'/distrust'); 
+			'label' => '/'.$this->bot_control_command.'/trust/remove'); 
 		$this->bot_triggers['admincommand'][$this->bot_control_command.'\/mention\/off'] = array(
 			'callbacks' => array(array($this, 'bot_command_control_command_mention_off')), 
 			'description' => "Listen to commands even if you don't mention me first.", 
@@ -1586,6 +1590,23 @@ class Spark {
 		if (empty($this->admins)) {
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return;
+		}
+
+		if (empty($this->trusted_domains[$event->rooms['id']]))
+			$text = "All messages are trusted right now.";
+		else
+			$text = "Currently trusted domains: ".implode(", ", $this->trusted_domains[$event->rooms['id']]);
+		$this->messages('POST', array('text' => $text, 'roomId' => $event->rooms['id']));
+
+		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+	}
+
+	protected function bot_command_control_command_trust_add($spark, $logger, $storage, $extensions, $event) {
+		$function_start = \function_start();
+
+		if (empty($this->admins)) {
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return;
 		} else {
 			if (empty($this->trusted_domains_file)) {
 				$this->logger->addError(__FILE__.": ".__METHOD__.": missing class parameter: trusted_domains_file");
@@ -1594,7 +1615,7 @@ class Spark {
 		}
 
 		if (empty($event->command['data'])) {
-			$text = "Usage: /bot/trust [domain] [domain] [...]\n";
+			$text = "Usage: /bot/trust/add [domain] [domain] [...]\n";
 			if (empty($this->trusted_domains[$event->rooms['id']]))
 				$text .= "All messages are trusted right now.";
 			else
@@ -1632,7 +1653,7 @@ class Spark {
 
 	}
 
-	protected function bot_command_control_command_distrust($spark, $logger, $storage, $extensions, $event) {
+	protected function bot_command_control_command_trust_remove($spark, $logger, $storage, $extensions, $event) {
 		$function_start = \function_start();
 
 		if (empty($this->admins)) {
@@ -1646,7 +1667,7 @@ class Spark {
 		}
 
 		if (empty($event->command['data'])) {
-			$text = "Usage: /bot/distrust [domain] [domain] [...]\n";
+			$text = "Usage: /bot/trust/remove [domain] [domain] [...]\n";
 			if (empty($this->trusted_domains[$event->rooms['id']]))
 				$text .= "All messages are trusted right now.";
 			else
