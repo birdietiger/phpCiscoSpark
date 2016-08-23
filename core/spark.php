@@ -3348,6 +3348,13 @@ class Spark {
 	protected function prepare_message_text($params) {
 		$function_start = \function_start();
 
+		if (!empty($params['markdown'])) {
+			if (is_callable('mb_convert_encoding')) {
+				$this->logger->addInfo(__FILE__.": ".__METHOD__.": converting \u escaped unicode");
+				$params['markdown'] = $this->from_utf16be_to_utf8($params['markdown']);
+			} else
+				$this->logger->addWarning(__FILE__.": ".__METHOD__.": can't convert \u escaped unicode. compile php with --enable-mbstring or enable mbstring extension");
+		} else unset($params['markdown']);
 		if (!empty($params['text'])) {
 			if (is_callable('mb_convert_encoding')) {
 				$this->logger->addInfo(__FILE__.": ".__METHOD__.": converting \u escaped unicode");
