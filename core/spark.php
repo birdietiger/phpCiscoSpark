@@ -8,6 +8,7 @@ class Spark {
 	protected $bot_triggers;
 	protected $enable_cache = true;
 	protected $cache_expires_in = 3600;
+	protected $get_room_membership = false;
 	protected $show_complete_invalid_command = false;
 	protected $room_before_update;
 	protected $config_file;
@@ -303,6 +304,16 @@ class Spark {
 
 		if (empty($this->existing_rooms = $this->get_all_rooms())) {
   	   	$this->logger->addWarning(__FILE__.": ".__METHOD__.": not a member of any rooms");
+		}
+
+		if (
+			!empty($this->existing_rooms)
+			&& $this->get_room_membership
+			&& $this->enable_cache
+			) {
+			$this->logger->addInfo(__FILE__.": ".__METHOD__.": getting membership to populate cache");
+			foreach ($this->existing_rooms as $room_id => $room_details)
+				$this->memberships('GET', ['roomId' => $room_id]);
 		}
 
 		if (empty($this->create_all_webhooks())) {
@@ -2791,22 +2802,24 @@ class Spark {
 						&& !empty($params['roomId'])
 						) {
 						if (
-							!empty($params['personId'])
-							&& !empty($this->cache['memberships_room_person'][$params['roomId']][$params['personId']]['data'])
+							(!empty($params['personId']) && !empty($this->cache['memberships_room_person'][$params['roomId']][$params['personId']]['data']))
+							|| (!empty($params['personEmail']) && !empty($this->cache['memberships_room_person'][$params['roomId']][$params['personEmail']]['data']))
 							) {
-							$this->logger->addDebug(__FILE__.": ".__METHOD__.": using memberships_room_person cache for room: ".$params['roomId']." person: ".$params['personId']);
+							if (!empty($params['personId'])) $person = $params['personId'];
+							else $person = $params['personEmail'];
+							$this->logger->addDebug(__FILE__.": ".__METHOD__.": using memberships_room_person cache for room: ".$params['roomId']." person: ".$person);
+							$membership_id = $this->cache['memberships_room_person'][$params['roomId']][$person]['data'];
 							$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-							$membership_id = $this->cache['memberships_room_person'][$params['roomId']][$params['personId']]['data'];
 							return [ 'items' => [ $this->cache['memberships'][$membership_id]['data'] ] ];
 						} else if (
 							count($params) == 1
 							&& !empty($this->cache['memberships_room'][$params['roomId']]['data'])
 							) {
 							$this->logger->addDebug(__FILE__.": ".__METHOD__.": using memberships_room cache for room: ".$params['roomId']);
-							$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 							foreach (array_keys($this->cache['memberships_room'][$params['roomId']]['data']) as $membership_id)
 								$membership_items[] = $this->cache['memberships'][$membership_id]['data'];
-							return [ 'items' => [ $membership_items ] ];
+							$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+							return [ 'items' => $membership_items ];
 						}
 					}
 				}
@@ -2866,6 +2879,7 @@ class Spark {
 						$this->cache[$api][$item['id']]['timestamp'] = time();
 						if ($api == 'memberships') {
 							$this->cache['memberships_room_person'][$item['roomId']][$item['personId']]['data'] = $item['id'];
+							$this->cache['memberships_room_person'][$item['roomId']][$item['personEmail']]['data'] = $item['id'];
 							if (
 								!empty($params['roomId'])
 								&& count($params) == 1
@@ -3053,6 +3067,7 @@ class Spark {
 						if (!empty($this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']])) {
 							$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache for memberships_room_person room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
 							unset($this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']]);
+							unset($this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personEmail']]);
 							$this->cache_updated = true;
 						}
 						if (!empty($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'][$webhook_message['data']['id']])) {
@@ -3159,10 +3174,29 @@ class Spark {
 						$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook resource details: id name: ".$resource_detail_key." id: ".$resource_detail_value);
 				}
 			}
-			if (!empty($event->people['id']) && !empty($event->rooms['id'])) {
-				if (empty($event->memberships = $this->memberships('GET', array('roomId' => $event->rooms['id'], 'personId' => $event->people['id']))))
-					$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook memberships resource details: roomId: ".$event->rooms['id']." personId: ".$event->people['id']);
+			if (!empty($event->rooms['id'])) {
+				
+				if ($this->get_room_membership) {
+					$this->logger->addInfo(__FILE__.": ".__METHOD__.": getting complete room membership");
+					if (empty($complete_memberships = $this->memberships('GET', array('roomId' => $event->rooms['id']))))
+						$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook memberships resource details: roomId: ".$event->rooms['id']);
+					else {
+						foreach ($complete_memberships['items'] as $index => $membership_details) {
+							if ($membership_details['personId'] == $event->people['id']) {
+								$single_membership = ['items' => [$complete_memberships['items'][$index]]];
+								unset($complete_memberships['items'][$index]);
+							}
+						}
+					}
+					$event->memberships = [ 'items' => array_merge($single_membership['items'], $complete_memberships['items']) ];
+					unset($complete_memberships);
+				} else if (!empty($event->people['id'])) {
+					if (empty($event->memberships = $this->memberships('GET', array('roomId' => $event->rooms['id'], 'personId' => $event->people['id']))))
+						$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook memberships resource details: roomId: ".$event->rooms['id']." personId: ".$event->people['id']);
+				}
+
 			}
+
 		}
 
 		if (
@@ -3679,6 +3713,9 @@ class Spark {
 
       if (empty($this->config['spark']['ipc_channel_psk'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: ipc_channel_psk");
       else $this->ipc_channel_psk = $this->config['spark']['ipc_channel_psk'];
+
+		if (!isset($this->config['spark']['get_room_membership']) || !is_bool((bool) $this->config['spark']['get_room_membership'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: get_room_membership");
+		else $this->get_room_membership = (bool) $this->config['spark']['get_room_membership'];
 
 		if (!isset($this->config['spark']['get_all_webhook_data']) || !is_bool((bool) $this->config['spark']['get_all_webhook_data'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: get_all_webhook_data");
 		else $this->get_all_webhook_data = (bool) $this->config['spark']['get_all_webhook_data'];
@@ -4405,8 +4442,10 @@ class Spark {
 			} else { 
 				foreach ($this->cache[$api] as $id => $details) {
 					if ($details['timestamp'] + $this->cache_expires_in <= time()) {
-						if ($api == 'memberships')
+						if ($api == 'memberships') {
 							unset($this->cache['memberships_room_person'][$details['data']['roomId']][$details['data']['personId']]);
+							unset($this->cache['memberships_room_person'][$details['data']['roomId']][$details['data']['personEmail']]);
+						}
 						unset($this->cache[$api][$id]);
 						$this->cache_updated = true;
 					}
