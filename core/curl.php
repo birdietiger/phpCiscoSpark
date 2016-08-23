@@ -5,6 +5,7 @@ class Curl {
 	protected $logger;
 	public $caller = '';
 	public $method;
+	public $paginate = false;
 	public $url;
 	public $success_http_code;
 	public $response_type;
@@ -62,6 +63,12 @@ class Curl {
 			$header_length = curl_getinfo($this->ch, CURLINFO_HEADER_SIZE);
 			$header = substr($response, 0, $header_length);
 			$this->logger->addInfo($this->caller.": ".__FILE__.": ".__METHOD__.": response header: $header");
+			$header_lines = explode("\r\n", $header);
+			foreach ($header_lines as $index => $header_line) {
+				if ($index == 0 || empty($header_line)) continue;
+				$header_elements = explode(":", $header_line, 2);
+				$header_array[strtolower($header_elements[0])] = $header_elements[1];
+			}
 			$body = substr($response, $header_length);
 			$this->logger->addDebug($this->caller.": ".__FILE__.": ".__METHOD__.": response body: $body");
 			if ($http_code == $this->success_http_code) {
@@ -73,6 +80,19 @@ class Curl {
 							return false;
 						} else {
 							$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+							if (
+								$this->paginate
+								&& !empty($header_array['link'])
+								&& preg_match('/rel="next"\s*$/', $header_array['link']) > 0
+								) {
+								$this->url = preg_replace('/^\s*<(.+)>.*$/', '\1', $header_array['link']);
+								$this->logger->addInfo($this->caller.": ".__FILE__.": ".__METHOD__.": paginating using ".$this->url);
+								if (empty($new_data = $this->request())) {
+									$this->logger->addError($this->caller.": ".__FILE__.": ".__METHOD__.": paginating failed");
+									return false;
+								}
+								$data = array_merge_recursive($new_data, $data);
+							}
 							return $data;
 						}
 					case 'html':
