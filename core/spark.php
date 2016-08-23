@@ -39,7 +39,6 @@ class Spark {
 	protected $registered_shutdown_function = false;
 	protected $existing_webhooks;
 	protected $webhook_target_topic = '/data/[email]/spark/webhooks/[id]';
-	protected $get_all_number = 100000;
 	protected $bot_webhook_name_prefix = 'phpCiscoSpark BOT for ';
 	protected $loop_timers = array(
 		'sleep' => 100000, // usecs
@@ -137,7 +136,6 @@ class Spark {
 			$this->logger->addInfo(__FILE__.": ".__METHOD__.": populating super users room cache");
 			$this->memberships('GET', [
 				'roomId' => $this->super_users_room,
-				'max' => $this->spark_endpoints[$this->message_version]['memberships']['/']['GET']['params']['max']['max']
 				]);
 		}
 
@@ -703,9 +701,9 @@ class Spark {
 		$function_start = \function_start();
 		$existing_rooms = array();
 		if ($this->get_room_type == 'all')
-			$result = $this->rooms('GET', array('max'=>$this->get_all_number));
+			$result = $this->rooms('GET', []);
 		else
-			$result = $this->rooms('GET', array('max'=>$this->get_all_number, 'type' => $this->get_room_type));
+			$result = $this->rooms('GET', ['type' => $this->get_room_type]);
 		if (!empty($result)) {
 			foreach ($result['items'] as $room_details) {
 				$existing_rooms[$room_details['id']] = $room_details;
@@ -724,7 +722,7 @@ class Spark {
 	protected function get_all_webhooks() {
 		$function_start = \function_start();
 		$existing_webhooks = array();
-		$result = $this->webhooks('GET', array('max'=>$this->get_all_number));
+		$result = $this->webhooks('GET', []);
 		if (!is_array($result)) {
 			$this->logger->addError(__FILE__.": ".__METHOD__.": didn't get all webhooks");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
@@ -2779,7 +2777,7 @@ class Spark {
 		$curl->params = null;
 
 		if ($this->enable_cache) {
-			if ($method == 'GET') {
+			if ($api != 'messages' && $method == 'GET') {
 				$cacheable = true;
 				if (!empty($id)) {
 					if (!empty($this->cache[$api][$id]['data'])) {
@@ -2798,16 +2796,17 @@ class Spark {
 							) {
 							$this->logger->addDebug(__FILE__.": ".__METHOD__.": using memberships_room_person cache for room: ".$params['roomId']." person: ".$params['personId']);
 							$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-							return [ 'items' => [ $this->cache['memberships_room_person'][$params['roomId']][$params['personId']]['data'] ] ];
+							$membership_id = $this->cache['memberships_room_person'][$params['roomId']][$params['personId']]['data'];
+							return [ 'items' => [ $this->cache['memberships'][$membership_id]['data'] ] ];
 						} else if (
-							count($params) == 2
-							&& !empty($params['max'])
-							&& $params['max'] >= $this->spark_endpoints[$this->message_version]['memberships']['/']['GET']['params']['max']['max']
+							count($params) == 1
 							&& !empty($this->cache['memberships_room'][$params['roomId']]['data'])
 							) {
 							$this->logger->addDebug(__FILE__.": ".__METHOD__.": using memberships_room cache for room: ".$params['roomId']);
 							$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-							return [ 'items' => [ $this->cache['memberships_room'][$params['roomId']]['data'] ] ];
+							foreach (array_keys($this->cache['memberships_room'][$params['roomId']]['data']) as $membership_id)
+								$membership_items[] = $this->cache['memberships'][$membership_id]['data'];
+							return [ 'items' => [ $membership_items ] ];
 						}
 					}
 				}
@@ -2832,6 +2831,8 @@ class Spark {
 			);
 		$curl->method = $method;
 		$curl->url = $api_url;
+		if (empty($params['max']) && $method == 'GET') $curl->paginate = true;
+		else $curl->paginate = false;
 		if ($method == 'DELETE') {
 			$curl->response_type = 'empty';
 			$curl->success_http_code = '204';
@@ -2839,7 +2840,8 @@ class Spark {
 			$curl->response_type = 'json';
 			$curl->success_http_code = '200';
 		}
-		if ($this->backoff) $curl->backoff_codes = array('429', '502');
+		if ($this->backoff) $curl->backoff_codes = ['429', '502'];
+		else $curl->backoff_codes = [];
 		$curl->caller = __FILE__.': '.__METHOD__;
 		$data = $curl->request();
 
@@ -2863,27 +2865,19 @@ class Spark {
 						$this->cache[$api][$item['id']]['data'] = $item;
 						$this->cache[$api][$item['id']]['timestamp'] = time();
 						if ($api == 'memberships') {
-							$this->cache['memberships_room_person'][$item['roomId']][$item['personId']]['data'] = $item;
-							$this->cache['memberships_room_person'][$item['roomId']][$item['personId']]['timestamp'] = time();
+							$this->cache['memberships_room_person'][$item['roomId']][$item['personId']]['data'] = $item['id'];
+							if (
+								!empty($params['roomId'])
+								&& count($params) == 1
+								) {
+								$this->cache['memberships_room'][$item['roomId']]['data'][$item['id']] = true;
+								if (empty($this->cache['memberships_room'][$item['roomId']]['timestamp']))
+									$this->cache['memberships_room'][$item['roomId']]['timestamp'] = time();
+							}
 						}
 						$this->cache_updated = true;
 					}
-					if (
-						$api == 'memberships'
-						&& count($params) == 2
-						&& !empty($params['max'])
-						&& $params['max'] >= $this->spark_endpoints[$this->message_version]['memberships']['/']['GET']['params']['max']['max']
-						) {
-						$this->cache['memberships_room'][$item['roomId']]['data'] = $data['items'];
-						$this->cache['memberships_room'][$item['roomId']]['timestamp'] = time();
-						$this->cache_updated = true;
-					}
-				} else if (!empty($id)) {
-					$this->logger->addDebug(__FILE__.": ".__METHOD__.": adding to $api cache for $id");
-					$this->cache[$api][$id]['data'] = $data;
-					$this->cache[$api][$id]['timestamp'] = time();
-					$this->cache_updated = true;
-				} else if ($method == 'POST' || $method == 'PUT') {
+				} else if (!empty($data['id'])) {
 					$this->logger->addDebug(__FILE__.": ".__METHOD__.": adding to $api cache for ".$data['id']);
 					$this->cache[$api][$data['id']]['data'] = $data;
 					$this->cache[$api][$data['id']]['timestamp'] = time();
@@ -3019,28 +3013,10 @@ class Spark {
 						$this->cache_updated = true;
 					}
 
-					if (!empty($this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']])) {
-						$this->logger->addDebug(__FILE__.": ".__METHOD__.": updating cache for memberships_room_person room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
-						$this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']]['data'] = $webhook_message['data'];
-						$this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']]['timestamp'] = time();
-						$this->cache_updated = true;
-					}
-
-					if (!empty($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'])) {
-						foreach ($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'] as $index => $member) {
-							if ($member['id'] == $webhook_message['data']['personId']) {
-								$this->logger->addDebug(__FILE__.": ".__METHOD__.": updating cache for memberships_room room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
-								$this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'][$index]['data'] = $webhook_message['data'];
-								$this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'][$index]['timestamp'] = time();
-								$this->cache_updated = true;
-							}
-						}
-					}
-	
 				} else {
 
 					if (!empty($this->cache[$webhook_message['resource']][$webhook_message['data']['id']])) {
-						$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing non-membership cache for ".$webhook_message['resource']." ".$webhook_message['data']['id']);
+						$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache due to update for ".$webhook_message['resource']." ".$webhook_message['data']['id']);
 						unset($this->cache[$webhook_message['resource']][$webhook_message['data']['id']]);
 						$this->cache_updated = true;
 					}
@@ -3061,7 +3037,7 @@ class Spark {
 
 					if ($webhook_message['data']['personId'] == $this->me['id']) {
 
-						if (!empty($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'])) {
+						if (!empty($this->cache['memberships_room'][$webhook_message['data']['roomId']])) {
 							$this->logger->addDebug(__FILE__.": ".__METHOD__.": bot left room. deleteing all cache for memberships_room room: ".$webhook_message['data']['roomId']);
 							unset($this->cache['memberships_room'][$webhook_message['data']['roomId']]);
 							$this->cache_updated = true;
@@ -3079,14 +3055,9 @@ class Spark {
 							unset($this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']]);
 							$this->cache_updated = true;
 						}
-						if (!empty($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'])) {
-							foreach ($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'] as $index => $member) {
-								if ($member['id'] == $webhook_message['data']['personId']) {
-									$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache for memberships_room room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
-									unset($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'][$index]);
-									$this->cache_updated = true;
-								}
-							}
+						if (!empty($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'][$webhook_message['data']['id']])) {
+							$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache for memberships_room room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
+							unset($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'][$webhook_message['data']['id']]);
 						}
 	
 					}
@@ -4424,16 +4395,7 @@ class Spark {
 		}
 
 		foreach (array_keys($this->cache) as $api) {
-			if ($api == 'memberships_room_person') {
-				foreach ($this->cache[$api] as $room_id => $people) {
-					foreach ($people as $person_id => $details) {
-						if ($details['timestamp'] + $this->cache_expires_in <= time()) {
-							unset($this->cache[$api][$room_id][$person_id]);
-							$this->cache_updated = true;
-						}
-					}
-				}
-			} else if ($api == 'memberships_room') {
+			if ($api == 'memberships_room') {
 				foreach ($this->cache[$api] as $room_id => $details) {
 					if ($details['timestamp'] + $this->cache_expires_in <= time()) {
 						unset($this->cache[$api][$room_id]);
@@ -4443,6 +4405,8 @@ class Spark {
 			} else { 
 				foreach ($this->cache[$api] as $id => $details) {
 					if ($details['timestamp'] + $this->cache_expires_in <= time()) {
+						if ($api == 'memberships')
+							unset($this->cache['memberships_room_person'][$details['data']['roomId']][$details['data']['personId']]);
 						unset($this->cache[$api][$id]);
 						$this->cache_updated = true;
 					}
