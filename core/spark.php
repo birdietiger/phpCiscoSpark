@@ -2983,45 +2983,112 @@ class Spark {
 			return false;
 		}
 
-		if (
-			$this->enable_cache
-			&& ($webhook_message['event'] == 'deleted' || $webhook_message['event'] == 'updated')
-			) {
+		if ($this->enable_cache) {
 
-			if (!empty($this->cache[$webhook_message['resource']][$webhook_message['data']['id']])) {
-				$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache for ".$webhook_message['resource']." ".$webhook_message['data']['id']);
-				unset($this->cache[$webhook_message['resource']][$webhook_message['data']['id']]);
-				$this->cache_updated = true;
+			if ($webhook_message['event'] == 'created') {
+
+				if ($webhook_message['resource'] == 'memberships') {
+
+					$this->logger->addDebug(__FILE__.": ".__METHOD__.": adding cache for ".$webhook_message['resource']." ".$webhook_message['data']['id']);
+					$this->cache[$webhook_message['resource']][$webhook_message['data']['id']]['data'] = $webhook_message['data'];
+					$this->cache[$webhook_message['resource']][$webhook_message['data']['id']]['timestamp'] = time();
+
+					$this->logger->addDebug(__FILE__.": ".__METHOD__.": adding cache for memberships_room_person room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
+					$this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']]['data'] = $webhook_message['data'];
+					$this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']]['timestamp'] = time();
+
+					if (!empty($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'])) {
+						$this->logger->addDebug(__FILE__.": ".__METHOD__.": adding cache for memberships_room room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
+						$this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'][] = $webhook_message['data'];
+					}
+
+					$this->cache_updated = true;
+
+				}
+
 			}
 
-			if ($webhook_message['resource'] == 'memberships') {
+			if ($webhook_message['event'] == 'updated') {
 
-				if ($webhook_message['data']['personId'] == $this->me['id']) {
-					if (!empty($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'])) {
-						$this->logger->addDebug(__FILE__.": ".__METHOD__.": bot left room. deleteing all cache for memberships_room room: ".$webhook_message['data']['roomId']);
-						unset($this->cache['memberships_room'][$webhook_message['data']['roomId']]);
+				if ($webhook_message['resource'] == 'memberships') {
+
+					if (!empty($this->cache[$webhook_message['resource']][$webhook_message['data']['id']])) {
+						$this->logger->addDebug(__FILE__.": ".__METHOD__.": updating cache for ".$webhook_message['resource']." ".$webhook_message['data']['id']);
+						$this->cache[$webhook_message['resource']][$webhook_message['data']['id']]['data'] = $webhook_message['data'];
+						$this->cache[$webhook_message['resource']][$webhook_message['data']['id']]['timestamp'] = time();
 						$this->cache_updated = true;
 					}
-					if (!empty($this->cache['memberships_room_person'][$webhook_message['data']['roomId']])) {
-						$this->logger->addDebug(__FILE__.": ".__METHOD__.": bot left room. deleteing all cache for memberships_room_person room: ".$webhook_message['data']['roomId']);
-						unset($this->cache['memberships_room_person'][$webhook_message['data']['roomId']]);
-						$this->cache_updated = true;
-					}
-
-				} else {
 
 					if (!empty($this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']])) {
-						$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache for memberships_room_person room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
-						unset($this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']]);
+						$this->logger->addDebug(__FILE__.": ".__METHOD__.": updating cache for memberships_room_person room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
+						$this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']]['data'] = $webhook_message['data'];
+						$this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']]['timestamp'] = time();
 						$this->cache_updated = true;
 					}
+
 					if (!empty($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'])) {
 						foreach ($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'] as $index => $member) {
-							if ($member['id'] == $webhook_message['data']['personId'])
-								$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache for memberships_room room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
-								unset($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'][$index]);
+							if ($member['id'] == $webhook_message['data']['personId']) {
+								$this->logger->addDebug(__FILE__.": ".__METHOD__.": updating cache for memberships_room room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
+								$this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'][$index]['data'] = $webhook_message['data'];
+								$this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'][$index]['timestamp'] = time();
 								$this->cache_updated = true;
+							}
 						}
+					}
+	
+				} else {
+
+					if (!empty($this->cache[$webhook_message['resource']][$webhook_message['data']['id']])) {
+						$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing non-membership cache for ".$webhook_message['resource']." ".$webhook_message['data']['id']);
+						unset($this->cache[$webhook_message['resource']][$webhook_message['data']['id']]);
+						$this->cache_updated = true;
+					}
+
+				}
+
+			}
+
+			if ($webhook_message['event'] == 'deleted') {
+
+				if (!empty($this->cache[$webhook_message['resource']][$webhook_message['data']['id']])) {
+					$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache for ".$webhook_message['resource']." ".$webhook_message['data']['id']);
+					unset($this->cache[$webhook_message['resource']][$webhook_message['data']['id']]);
+					$this->cache_updated = true;
+				}
+
+				if ($webhook_message['resource'] == 'memberships') {
+
+					if ($webhook_message['data']['personId'] == $this->me['id']) {
+
+						if (!empty($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'])) {
+							$this->logger->addDebug(__FILE__.": ".__METHOD__.": bot left room. deleteing all cache for memberships_room room: ".$webhook_message['data']['roomId']);
+							unset($this->cache['memberships_room'][$webhook_message['data']['roomId']]);
+							$this->cache_updated = true;
+						}
+						if (!empty($this->cache['memberships_room_person'][$webhook_message['data']['roomId']])) {
+							$this->logger->addDebug(__FILE__.": ".__METHOD__.": bot left room. deleteing all cache for memberships_room_person room: ".$webhook_message['data']['roomId']);
+							unset($this->cache['memberships_room_person'][$webhook_message['data']['roomId']]);
+							$this->cache_updated = true;
+						}
+	
+					} else {
+	
+						if (!empty($this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']])) {
+							$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache for memberships_room_person room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
+							unset($this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']]);
+							$this->cache_updated = true;
+						}
+						if (!empty($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'])) {
+							foreach ($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'] as $index => $member) {
+								if ($member['id'] == $webhook_message['data']['personId']) {
+									$this->logger->addDebug(__FILE__.": ".__METHOD__.": deleteing cache for memberships_room room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
+									unset($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'][$index]);
+									$this->cache_updated = true;
+								}
+							}
+						}
+	
 					}
 
 				}
@@ -3667,7 +3734,11 @@ class Spark {
       else $this->loop_timers['save_cache'] = $this->config['spark']['cache_saves_in'];
 
       if (empty($this->config['spark']['cache_expires_in'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: cache_expires_in");
-      else $this->cache_expires_in = $this->config['spark']['cache_expires_in'];
+      else {
+			$this->cache_expires_in = $this->config['spark']['cache_expires_in'];
+			if ($this->cache_expires_in == -1)
+				$this->logger->addInfo(__FILE__.": spark cache will never expire");
+		}
 
 		if (empty($this->config['spark']['cache_file'])) {
 			$this->logger->addWarning(__FILE__.": missing configuration parameters: cache_file");
@@ -4347,6 +4418,11 @@ class Spark {
 	protected function clean_cache() {
 		$function_start = \function_start();
 
+		if ($this->cache_expires_in == -1) {
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return;
+		}
+
 		foreach (array_keys($this->cache) as $api) {
 			if ($api == 'memberships_room_person') {
 				foreach ($this->cache[$api] as $room_id => $people) {
@@ -4375,8 +4451,6 @@ class Spark {
 		}
 
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-		return true;
-
 	}
 
 }
