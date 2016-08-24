@@ -2813,7 +2813,7 @@ class Spark {
 							return [ 'items' => [ $this->cache['memberships'][$membership_id]['data'] ] ];
 						} else if (
 							count($params) == 1
-							&& !empty($this->cache['memberships_room'][$params['roomId']]['data'])
+							&& !empty($this->cache['memberships_room'][$params['roomId']])
 							) {
 							$this->logger->addDebug(__FILE__.": ".__METHOD__.": using memberships_room cache for room: ".$params['roomId']);
 							foreach (array_keys($this->cache['memberships_room'][$params['roomId']]['data']) as $membership_id)
@@ -3002,12 +3002,12 @@ class Spark {
 					$this->cache[$webhook_message['resource']][$webhook_message['data']['id']]['timestamp'] = time();
 
 					$this->logger->addDebug(__FILE__.": ".__METHOD__.": adding cache for memberships_room_person room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
-					$this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']]['data'] = $webhook_message['data'];
-					$this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']]['timestamp'] = time();
+					$this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personEmail']]['data'] = $webhook_message['data']['id'];
+					$this->cache['memberships_room_person'][$webhook_message['data']['roomId']][$webhook_message['data']['personId']]['data'] = $webhook_message['data']['id'];
 
-					if (!empty($this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'])) {
+					if (!empty($this->cache['memberships_room'][$webhook_message['data']['roomId']])) {
 						$this->logger->addDebug(__FILE__.": ".__METHOD__.": adding cache for memberships_room room: ".$webhook_message['data']['roomId']." person: ".$webhook_message['data']['personId']);
-						$this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'][] = $webhook_message['data'];
+						$this->cache['memberships_room'][$webhook_message['data']['roomId']]['data'][$webhook_message['data']['id']] = true;
 					}
 
 					$this->cache_updated = true;
@@ -4409,16 +4409,11 @@ class Spark {
 	protected function save_cache() {
 		$function_start = \function_start();
 
-		if (empty($this->cache_file)) {
-			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
-		}
+		if (empty($this->cache_file)) return false;
 
-		if (!$this->cache_updated) {
-			$this->logger->addDebug(__FILE__.": ".__METHOD__.": cache hasn't been updated, so don't need to save");
-			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
-		}
+		if (!$this->cache_updated) return false;
+
+		$this->logger->addDebug(__FILE__.": ".__METHOD__.": cache has been updated, so need to save");
 
 		if (empty(file_put_contents($this->cache_file, json_encode($this->cache, JSON_PRETTY_PRINT), LOCK_EX))) {
 			$this->logger->addCritical(__FILE__.": ".__METHOD__.": !!! couldn't write to ".$this->cache_file.", bot can't maintain cache if restarted. !!!");
@@ -4433,10 +4428,7 @@ class Spark {
 	protected function clean_cache() {
 		$function_start = \function_start();
 
-		if ($this->cache_expires_in == -1) {
-			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return;
-		}
+		if ($this->cache_expires_in == -1) return;
 
 		foreach (array_keys($this->cache) as $api) {
 			if ($api == 'memberships_room') {
