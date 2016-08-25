@@ -2112,7 +2112,7 @@ class Spark {
 
 	public function bot_process_webhook($spark, $logger, $storage, $extensions, $event) {
 		$function_start = \function_start();
-		$is_admin = $event->permissions['admin'];
+		$is_admin = (!empty($event->permissions['admin'])) ? true : false;
 		if (!empty($this->admins) && !empty($event->rooms['id']) && empty($this->enabled_rooms[$event->rooms['id']])) {
 			$this->logger->addWarning(__FILE__.": ".__METHOD__.": there are admins and this room hasn't been enabled");
 			$room_disabled = true;
@@ -2998,6 +2998,10 @@ class Spark {
 			return false;
 		}
 
+		$event = new StdClass();
+		$event->webhooks = $webhook_message;
+		$event->permissions = [];
+
 		if ($this->enable_cache) {
 
 			if ($webhook_message['event'] == 'created') {
@@ -3024,6 +3028,11 @@ class Spark {
 			}
 
 			if ($webhook_message['event'] == 'updated') {
+
+				$event->updated = [];
+				if (!empty($this->cache[$webhook_message['resource']][$webhook_message['data']['id']])) {
+					$event->updated[$webhook_message['resource']] = $this->cache[$webhook_message['resource']][$webhook_message['data']['id']]['data'];
+				}
 
 				if ($webhook_message['resource'] == 'memberships') {
 
@@ -3101,10 +3110,6 @@ class Spark {
 			}
 
 		}
-
-		$event = new StdClass();
-		$event->webhooks = $webhook_message;
-		$event->permissions = [];
 
 		if (
 			$webhook_message['resource'] == 'messages' 
@@ -3201,19 +3206,49 @@ class Spark {
 						$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook memberships resource details: roomId: ".$event->rooms['id']);
 					else {
 						foreach ($complete_memberships['items'] as $index => $membership_details) {
-							if ($membership_details['personId'] == $event->people['id']) {
-								$single_membership = ['items' => [$complete_memberships['items'][$index]]];
-								unset($complete_memberships['items'][$index]);
+							if (!empty($event->people['id'])) {
+								if ($membership_details['personId'] == $event->people['id']) {
+									$single_membership = ['items' => [$complete_memberships['items'][$index]]];
+									unset($complete_memberships['items'][$index]);
+									break;
+								}
 							}
 						}
 					}
-					$event->memberships = [ 'items' => array_merge($single_membership['items'], $complete_memberships['items']) ];
+					if (!empty($single_membership))
+						$event->memberships = [ 'items' => array_merge($single_membership['items'], $complete_memberships['items']) ];
+					else
+						$event->memberships = $complete_memberships;
 					unset($complete_memberships);
 				} else if (!empty($event->people['id'])) {
 					if (empty($event->memberships = $this->memberships('GET', array('roomId' => $event->rooms['id'], 'personId' => $event->people['id']))))
 						$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook memberships resource details: roomId: ".$event->rooms['id']." personId: ".$event->people['id']);
 				}
 
+			}
+
+			if (!empty($event->updated)) {
+				foreach ($event->updated as $resource => $orig_data) {
+					$updated = false;
+					if (!empty($event->$resource)) {
+						if ($resource == 'memberships') {
+							if ($event->{$resource}['items'][0]['id'] == $orig_data['id']) {
+								$event->updated[$resource] = array_diff_assoc($event->{$resource}['items'][0], $orig_data);
+								$event->updated[$resource]['id'] = $event->{$resource}['items'][0]['id'];
+								$updated = true;
+							}
+						} else {
+							if ($event->{$resource}['id'] == $orig_data['id']) {
+								$event->updated[$resource] = array_diff_assoc($event->$resource, $orig_data);
+								$event->updated[$resource]['id'] = $event->{$resource}['id'];
+								$updated = true;
+							}
+						}
+						if (isset($event->updated[$resource]['created'])) unset($event->updated[$resource]['created']);
+						if (isset($event->updated[$resource]['lastActivity'])) unset($event->updated[$resource]['lastActivity']);
+					}
+					if (!$updated) unset($event->updated[$resource]);
+				}
 			}
 
 		}
