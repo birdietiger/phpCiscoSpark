@@ -3190,12 +3190,12 @@ class Spark {
 			foreach ($event->$webhook_message['resource'] as $resource_detail_key => $resource_detail_value) {
 				if (!empty($endpoint_id_names[$resource_detail_key])) {
 					if ($webhook_message['event'] == 'deleted') {
-						if ($endpoint_id_names[$resource_detail_key] == $event->webhooks['resource']) {
-							$event->$endpoint_id_names[$resource_detail_key] = $event->$webhook_message['data'];
+						if ($endpoint_id_names[$resource_detail_key] == $webhook_message['resource']) {
+							$event->$endpoint_id_names[$resource_detail_key] = $webhook_message['data'];
 						} else if (
-							$event->webhooks['resource'] == 'memberships'
+							$webhook_message['resource'] == 'memberships'
 							&& $endpoint_id_names[$resource_detail_key] == 'rooms'
-							&& $event->webhooks['data']['personId'] == $this->me['id']
+							&& $webhook_message['data']['personId'] == $this->me['id']
 							) {
 							$event->rooms = [ 'id' => $webhook_message['data']['roomId'] ];
 						}
