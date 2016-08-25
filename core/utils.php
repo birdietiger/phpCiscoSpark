@@ -106,16 +106,23 @@ function save_new_file($file, $content) {
 
 function collect_missing_passwords($config, $type = '') {
 
-	if (!empty($type)) $type .= ' ';
-
 	foreach ($config as $config_key => $config_value) {
 
 		if (is_array($config_value)) {
 
 			if (($config[$config_key] = collect_missing_passwords($config_value, $config_key)) === false) return false;
 
-		} else if (preg_match("/_password$/", $config_key) > 0 && strlen($config_value) == 0) {
+		} else if (
+			preg_match('/^(.+)_password$/', $config_key, $matches) > 0
+			&& strlen($config_value) == 0
+			) {
 
+			if (
+				!empty($config[$matches[1].'_account'])
+				&& preg_match('/@sparkbot.io$/', $config[$matches[1].'_account']) > 0
+				) continue;
+
+			if (!empty($type)) $type .= ' ';
 			if (strlen(($config[$config_key] = get_prompt('Please provide '.$type.$config_key.': ', 3, true))) == 0) return false;
 
 		}

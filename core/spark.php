@@ -3,6 +3,8 @@
 class Spark {
 
 	protected $cache_updated = false;
+	protected $access_token;
+	protected $is_sparkbot_io = false;
 	public $existing_rooms;
 	public $admins;
 	protected $bot_triggers;
@@ -13,7 +15,7 @@ class Spark {
 	protected $room_before_update;
 	protected $config_file;
 	protected $passive = false;
-	private $is_cli;
+	protected $is_cli;
    public $token_file;
    public $oauth_provider;
 	protected $post_webhook_json;
@@ -117,12 +119,19 @@ class Spark {
 
 		$this->set_variables();
 
-		if (!empty($this->machine_account) && !empty($this->machine_password)) {
+		if ($this->is_sparkbot_io) {
+			if (!empty($this->access_token))
+				$this->set_tokens($this->access_token);
+		} else if (
+			!empty($this->machine_account)
+			&& !empty($this->machine_password)
+			) {
 			if (!empty($tokens = $this->get_bot_tokens()))
 				$this->set_tokens($tokens['access_token'], $tokens['expires_in'], $tokens['refresh_token'], $tokens['refresh_token_expires_in'], false);
 			else
 				$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get bot tokens");
-		}
+		} else
+			$this->logger->addWarning(__FILE__.": ".__METHOD__.": couldn't set tokens");
 
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 
@@ -255,40 +264,51 @@ class Spark {
 
 		$this->spark_endpoints = $spark_endpoints;
 
-		if (empty($this->config['config_file'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: config_file");
+		if (empty($this->config['config_file'])) $this->logger->addWarning(__FILE__.": ".__METHOD__." missing configuration parameters: config_file");
 		else $this->config_file = $this->config['config_file'];
 
-		if (empty($this->config['spark']['machine_account'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: machine_account");
-		else $this->machine_account = $this->config['spark']['machine_account'];
+		if (empty($this->config['spark']['machine_account'])) $this->logger->addWarning(__FILE__.": ".__METHOD__." missing configuration parameters: machine_account");
+		else {
+			$this->machine_account = $this->config['spark']['machine_account'];
+			if (preg_match('/@sparkbot.io$/', $this->machine_account) > 0) {
+				$this->logger->addInfo(__FILE__.": ".__METHOD__.": this is a sparkbot.io bot");
+				$this->is_sparkbot_io = true;
+			}
+		}
 
-		if (empty($this->config['spark']['machine_password'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: machine_password");
+		if (empty($this->config['spark']['machine_password'])) $this->logger->addWarning(__FILE__.": ".__METHOD__." missing configuration parameters: machine_password");
 		else $this->machine_password = $this->config['spark']['machine_password'];
 
-		if (empty($this->config['spark']['api_url'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: api_url");
+		if (empty($this->config['spark']['api_url'])) $this->logger->addWarning(__FILE__.": ".__METHOD__." missing configuration parameters: api_url");
 		else $this->api_url = $this->config['spark']['api_url'];
 
 		if (empty($this->message_version = preg_replace("/^.*\/v([0-9]+)\/$/", "$1", $this->config['spark']['api_url']))) 
-			$this->logger->addWarning(__FILE__.": missing api version from api_url");
+			$this->logger->addWarning(__FILE__.": ".__METHOD__." missing api version from api_url");
 
-		if (empty($this->config['spark']['tokens_url'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: tokens_url");
+		if (empty($this->config['spark']['tokens_url'])) $this->logger->addWarning(__FILE__.": ".__METHOD__." missing configuration parameters: tokens_url");
 		else $this->tokens_url = $this->config['spark']['tokens_url'];
 
-		if (empty($this->config['spark']['oauth_redirect_uri'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: oauth_redirect_uri");
+		if (empty($this->config['spark']['oauth_redirect_uri'])) $this->logger->addWarning(__FILE__.": ".__METHOD__." missing configuration parameters: oauth_redirect_uri");
 		else $this->oauth_redirect_uri = $this->config['spark']['oauth_redirect_uri'];
 
-		if (empty($this->config['spark']['client_id'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: client_id");
+		if (empty($this->config['spark']['client_id'])) $this->logger->addWarning(__FILE__.": ".__METHOD__." missing configuration parameters: client_id");
 		else $this->client_id = $this->config['spark']['client_id'];
 
-		if (empty($this->config['spark']['client_secret'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: client_secret");
+		if (empty($this->config['spark']['client_secret'])) $this->logger->addWarning(__FILE__.": ".__METHOD__." missing configuration parameters: client_secret");
 		else $this->client_secret = $this->config['spark']['client_secret'];
 
-		if (empty($this->config['spark']['oauth_provider'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: oauth_provider");
+		if (empty($this->config['spark']['oauth_provider'])) $this->logger->addWarning(__FILE__.": ".__METHOD__." missing configuration parameters: oauth_provider");
 		else $this->oauth_provider = $this->config['spark']['oauth_provider'];
 
 		if (empty($this->config['spark']['token_file'])) $this->logger->addWarning(__FILE__.": ".__METHOD__." missing configuration parameter: token_file");
       else $this->token_file = $this->config['spark']['token_file'];
 
-		if (!isset($this->config['spark']['backoff']) || !is_bool((bool) $this->config['spark']['backoff'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: backoff");
+		if (empty($this->config['spark']['access_token'])) {
+			$this->logger->addWarning(__FILE__.": ".__METHOD__." missing configuration parameters: access_token");
+			if ($this->is_sparkbot_io) $this->logger->addWarning(__FILE__.": ".__METHOD__." without access_token in config, it must be set in app code");
+		} else $this->access_token = $this->config['spark']['access_token'];
+
+		if (!isset($this->config['spark']['backoff']) || !is_bool((bool) $this->config['spark']['backoff'])) $this->logger->addWarning(__FILE__.": ".__METHOD__." missing configuration parameters: backoff");
 		else $this->backoff = (bool) $this->config['spark']['backoff'];
 
 	}
@@ -385,7 +405,9 @@ class Spark {
 			}
 
 			// keep tokens fresh
-			if ($next_token_check <= time()) {
+			if (
+				!$this->is_sparkbot_io
+				&& $next_token_check <= time()) {
 				if (!empty($tokens = $this->get_bot_tokens()))
 					$this->set_tokens($tokens['access_token'], $tokens['expires_in'], $tokens['refresh_token'], $tokens['refresh_token_expires_in'], false);
 				else
@@ -486,39 +508,6 @@ class Spark {
 			}
 			return $job->isGarbage();
 		});
-	}
-
-	public function keep_tokens_fresh($tokens = null) {
-		$function_start = \function_start();
-
-		if (empty($tokens)) $tokens = $this->tokens;
-
-		if ($tokens['expires_in']+$tokens['access_token_timestamp'] < time()-3600) {
-			$this->logger->addInfo(__FILE__.": ".__METHOD__.": access token has expired or will in less than an hour");
-
-			if (!empty($tokens['refresh_token'])) {
-				if (!$tokens['refresh_token_expires_in']+$tokens['refresh_token_timestamp'] < time()-3600) {
-					if (empty($new_tokens = refresh_access_token()))
-						$this->logger->addError(__FILE__.": ".__METHOD__.": failed to refresh access token");
-					else {
-						$this->set_tokens($new_tokens['access_token'], $new_tokens['expires_in'], $new_tokens['refresh_token'], $new_tokens['refresh_token_expires_in']);
-						$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-						return;
-					}
-				} else
-					$this->logger->addError(__FILE__.": ".__METHOD__.": refresh token has expired or will in less than an hour");
-			} else
-				$this->logger->addWarning(__FILE__.": ".__METHOD__.": don't have a refresh token");
-
-			$this->logger->addCritical(__FILE__.": ".__METHOD__.": forking to get bot tokens");
-			$this->fork_get_bot_tokens();
-
-		}
-		if (empty($this->me = $this->validate_users_access_token($this->machine_account, $tokens['access_token']))) {
-			$this->logger->addError(__FILE__.": ".__METHOD__.": need to get new bot tokens, these are invalid");
-			$this->get_bot_tokens();
-		}
-		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 	}
 
 	protected function set_me_mention_regex() {
@@ -2116,7 +2105,7 @@ class Spark {
 		if (!empty($this->admins) && !empty($event->rooms['id']) && empty($this->enabled_rooms[$event->rooms['id']])) {
 			$this->logger->addWarning(__FILE__.": ".__METHOD__.": there are admins and this room hasn't been enabled");
 			$room_disabled = true;
-			if (!$is_admin && !$event->permissions['super_user']) {
+			if (!$is_admin && empty($event->permissions['super_user'])) {
 				if (!empty($event->webhooks['data']['personEmail']))
 					$this->logger->addWarning(__FILE__.": ".__METHOD__.": room isn't enabled and user isn't an admin or super user: ".$event->webhooks['data']['personEmail']);
 				else 
@@ -3849,6 +3838,10 @@ class Spark {
 
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
    }
+
+	public function set_access_token($access_token) {
+		$this->tokens['access_token'] = $access_token;
+	}
 
 	public function set_tokens($access_token, $expires_in = 0, $refresh_token = null, $refresh_token_expires_in = 0, $get_me = true) {
 		$function_start = \function_start();
