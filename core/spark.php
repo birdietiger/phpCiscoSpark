@@ -3189,12 +3189,18 @@ class Spark {
 			$this->logger->addInfo(__FILE__.": ".__METHOD__.": getting all webhook data from all endpoints");
 			foreach ($event->$webhook_message['resource'] as $resource_detail_key => $resource_detail_value) {
 				if (!empty($endpoint_id_names[$resource_detail_key])) {
-					if (
-						$webhook_message['event'] == 'deleted'
-						&& $endpoint_id_names[$resource_detail_key] == $event->$webhook_message['resource']
-						) {
-						$event->$endpoint_id_names[$resource_detail_key] = $event->$webhook_message['data'];
-					} else {
+					if ($webhook_message['event'] == 'deleted') {
+						if ($endpoint_id_names[$resource_detail_key] == $event->webhooks['resource']) {
+							$event->$endpoint_id_names[$resource_detail_key] = $event->$webhook_message['data'];
+						} else if (
+							$event->webhooks['resource'] == 'memberships'
+							&& $endpoint_id_names[$resource_detail_key] == 'rooms'
+							&& $event->webhooks['data']['personId'] == $this->me['id']
+							) {
+							$event->rooms = [ 'id' => $webhook_message['data']['roomId'] ];
+						}
+					}
+					if (empty($event->$endpoint_id_names[$resource_detail_key])) {
 						$get_resource_params = array($resource_detail_key => $resource_detail_value);
 						//if ($endpoint_id_names[$resource_detail_key] == 'rooms') $get_resource_params['showSipAddress'] = true;
 						if (empty($event->$endpoint_id_names[$resource_detail_key] = $this->$endpoint_id_names[$resource_detail_key]('GET', $get_resource_params))) 
@@ -3203,8 +3209,14 @@ class Spark {
 				}
 			}
 			if (!empty($event->rooms['id'])) {
-				
-				if ($this->get_room_membership) {
+
+				if (
+					$event->webhooks['resource'] == 'memberships'
+					&& $event->webhooks['event'] == 'deleted'
+					&& $event->webhooks['data']['personId'] == $this->me['id']
+					) {
+					$this->logger->addInfo(__FILE__.": ".__METHOD__.": no memberships to get since bot was removed from room");
+				} else if ($this->get_room_membership) {
 					$this->logger->addInfo(__FILE__.": ".__METHOD__.": getting complete room membership");
 					if (empty($complete_memberships = $this->memberships('GET', array('roomId' => $event->rooms['id']))))
 						$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook memberships resource details: roomId: ".$event->rooms['id']);
