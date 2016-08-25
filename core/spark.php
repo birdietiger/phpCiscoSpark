@@ -3174,8 +3174,11 @@ class Spark {
 		}
 
 		if (
+			$webhook_message['event'] == 'deleted'
+			|| $webhook_message['resource'] == 'memberships'
+			) $event->$webhook_message['resource'] = $webhook_message['data'];
+		else if (
 			!empty($id_name)
-			&& $webhook_message['event'] != 'deleted'
 			&& empty($event->$webhook_message['resource'] = $this->$webhook_message['resource']('GET', array($id_name => $webhook_message['data']['id'])))
 			) $this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook resource details: id name: $id_name id: ".$webhook_message['data']['id']);
 
@@ -3187,7 +3190,7 @@ class Spark {
 			foreach ($event->$webhook_message['resource'] as $resource_detail_key => $resource_detail_value) {
 				if (!empty($endpoint_id_names[$resource_detail_key])) {
 					if (
-						$event->$webhook_message['event'] == 'deleted'
+						$webhook_message['event'] == 'deleted'
 						&& $endpoint_id_names[$resource_detail_key] == $event->$webhook_message['resource']
 						) {
 						$event->$endpoint_id_names[$resource_detail_key] = $event->$webhook_message['data'];
@@ -3221,7 +3224,10 @@ class Spark {
 					else
 						$event->memberships = $complete_memberships;
 					unset($complete_memberships);
-				} else if (!empty($event->people['id'])) {
+				} else if (
+					$event->webhooks['resource'] != 'memberships'
+					&& !empty($event->people['id'])
+					) {
 					if (empty($event->memberships = $this->memberships('GET', array('roomId' => $event->rooms['id'], 'personId' => $event->people['id']))))
 						$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook memberships resource details: roomId: ".$event->rooms['id']." personId: ".$event->people['id']);
 				}
