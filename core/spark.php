@@ -2427,7 +2427,12 @@ class Spark {
 		if (!empty($this->bot_triggers['webhook'])) {
 			foreach ($this->bot_triggers['webhook'] as $bot_webhook_resource_event => $bot_webhook_resource_event_params) {
 				list($bot_webhook_resource, $bot_webhook_event) = explode('_', $bot_webhook_resource_event);
-				if ($event->webhooks['resource'] == $bot_webhook_resource && $event->webhooks['event'] == $bot_webhook_event) {
+				if (
+					$bot_webhook_resource == 'all' && $bot_webhook_event == 'all'
+					|| $bot_webhook_resource == $event->webhooks['resource'] && $bot_webhook_event == 'all'
+					|| $bot_webhook_resource == 'all' && $bot_webhook_event == $event->webhooks['event']
+					|| $bot_webhook_resource == $event->webhooks['resource'] && $bot_webhook_event == $event->webhooks['event']
+					) {
 					if ($this->multithreaded) $this->collect_worker_garbage();
 					foreach ($bot_webhook_resource_event_params['callbacks'] as $callback) {
 						if ($this->multithreaded) {
