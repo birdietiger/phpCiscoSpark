@@ -2806,8 +2806,11 @@ class Spark {
       }
 		$curl->params = null;
 
-		if ($this->enable_cache) {
-			if ($api != 'messages' && $method == 'GET') {
+		if (
+			$this->enable_cache
+			&& $api != 'messages'
+			) {
+			if ($method == 'GET') {
 				$cacheable = true;
 				if (!empty($id)) {
 					if (!empty($this->cache[$api][$id]['data'])) {
