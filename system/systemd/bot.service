@@ -1,5 +1,7 @@
 [Unit]
 Description=bot
+After=network-online.target
+Requires=network-online.target
 
 [Service]
 Restart=on-failure
@@ -8,7 +10,3 @@ PIDFile=/var/run/bot.pid
 User=bot
 EnvironmentFile=/etc/environment
 ExecStart=/usr/local/bin/php /usr/local/bin/bot/bot.php
-
-[Install]
-WantedBy=multi-user.target
-Requires/After=network-online.target
