@@ -106,6 +106,8 @@ function save_new_file($file, $content) {
 
 function collect_missing_passwords($config, $type = '') {
 
+	$sparkbot_domains = ['sparkbot.io'];
+
 	foreach ($config as $config_key => $config_value) {
 
 		if (is_array($config_value)) {
@@ -119,7 +121,7 @@ function collect_missing_passwords($config, $type = '') {
 
 			if (
 				!empty($config[$matches[1].'_account'])
-				&& preg_match('/@sparkbot.io$/', $config[$matches[1].'_account']) > 0
+				&& preg_match('/@('.implode('|', $sparkbot_domains).')$/', $config[$matches[1].'_account']) > 0
 				) continue;
 
 			if (!empty($type)) $type .= ' ';

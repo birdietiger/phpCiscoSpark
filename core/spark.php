@@ -4,7 +4,8 @@ class Spark {
 
 	protected $cache_updated = false;
 	protected $access_token;
-	protected $is_sparkbot_io = false;
+	protected $is_sparkbot = false;
+	protected $sparkbot_domains = [ 'sparkbot.io' ];
 	public $existing_rooms;
 	public $admins;
 	protected $bot_triggers;
@@ -21,8 +22,8 @@ class Spark {
 	protected $post_webhook_json;
    protected $access_token_expiration_lookahead = 3600; // secs
    protected $refresh_token_expiration_lookahead = 7; // days
-   protected $default_allowed_domains = array();
-   protected $default_trusted_domains = array();
+   protected $default_allowed_domains = [];
+   protected $default_trusted_domains = [];
 	public $logger;
 	public $config;
 	protected $broker;
@@ -43,16 +44,16 @@ class Spark {
 	protected $existing_webhooks;
 	protected $webhook_target_topic = '/data/[email]/spark/webhooks/[id]';
 	protected $bot_webhook_name_prefix = 'phpCiscoSpark BOT for ';
-	protected $loop_timers = array(
+	protected $loop_timers = [
 		'sleep' => 100000, // usecs
 		'garbage' => 500000, // usecs
 		'token' => 1800, // secs
 		'storage' => 10, // secs
 		'clean_cache' => 300, // secs
 		'save_cache' => 60, // secs
-		);
+		];
 	protected $reload_subscriptions = false;
-	public $enabled_rooms = array();
+	public $enabled_rooms = [];
 	public $super_users_room;
 	protected $bot_control_command = 'bot';
 	protected $me_mention_regex;
@@ -83,7 +84,7 @@ class Spark {
 	protected $delete_invalid_commands = false;
 	protected $webhook_direct = true;
 	protected $get_room_type = 'all';
-	protected $room_types = array('all', 'direct', 'group');
+	protected $room_types = ['all', 'direct', 'group'];
 
    public function __construct($logger = null, $config = null, $files_storage = null, $extensions = null, $storage = null, $broker = null) {
 		$function_start = \function_start();
@@ -119,19 +120,32 @@ class Spark {
 
 		$this->set_variables();
 
-		if ($this->is_sparkbot_io) {
-			if (!empty($this->access_token))
-				$this->set_tokens($this->access_token);
+		if (!empty($this->access_token)) {
+			$this->logger->addInfo(__FILE__.": ".__METHOD__.": access_token set in config file, using that to set tokens");
+			if (empty($this->set_tokens($this->access_token))) {
+				$this->logger->addCritical(__FILE__.": ".__METHOD__.": failed to set tokens");
+				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+				exit();
+			}
+		} else if ($this->is_sparkbot) {
+			$this->logger->addWarning(__FILE__.": ".__METHOD__.": sparkbot.io and no access_token, so can't set tokens. must be set in code");
 		} else if (
 			!empty($this->machine_account)
 			&& !empty($this->machine_password)
 			) {
-			if (!empty($tokens = $this->get_bot_tokens()))
-				$this->set_tokens($tokens['access_token'], $tokens['expires_in'], $tokens['refresh_token'], $tokens['refresh_token_expires_in'], false);
-			else
-				$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get bot tokens");
+			if (!empty($tokens = $this->get_bot_tokens())) {
+				if (empty($this->set_tokens($tokens['access_token'], $tokens['expires_in'], $tokens['refresh_token'], $tokens['refresh_token_expires_in'], false))) {
+					$this->logger->addCritical(__FILE__.": ".__METHOD__.": failed to set tokens");
+					$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+					exit();
+				}
+			} else {
+				$this->logger->addCritical(__FILE__.": ".__METHOD__.": couldn't get bot tokens");
+				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+				exit();
+			}
 		} else
-			$this->logger->addWarning(__FILE__.": ".__METHOD__.": couldn't set tokens");
+			$this->logger->addWarning(__FILE__.": ".__METHOD__.": nothing to set tokens with. must be set in code");
 
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 
@@ -270,9 +284,9 @@ class Spark {
 		if (empty($this->config['spark']['machine_account'])) $this->logger->addWarning(__FILE__.": ".__METHOD__." missing configuration parameters: machine_account");
 		else {
 			$this->machine_account = $this->config['spark']['machine_account'];
-			if (preg_match('/@sparkbot.io$/', $this->machine_account) > 0) {
-				$this->logger->addInfo(__FILE__.": ".__METHOD__.": this is a sparkbot.io bot");
-				$this->is_sparkbot_io = true;
+			if (preg_match('/@('.implode('|', $this->sparkbot_domains).')$/', $this->machine_account, $matches) > 0) {
+				$this->logger->addInfo(__FILE__.": ".__METHOD__.": this is a sparkbot, domain: ".$matches[1]);
+				$this->is_sparkbot = true;
 			}
 		}
 
@@ -305,7 +319,7 @@ class Spark {
 
 		if (empty($this->config['spark']['access_token'])) {
 			$this->logger->addWarning(__FILE__.": ".__METHOD__." missing configuration parameters: access_token");
-			if ($this->is_sparkbot_io) $this->logger->addWarning(__FILE__.": ".__METHOD__." without access_token in config, it must be set in app code");
+			if ($this->is_sparkbot) $this->logger->addWarning(__FILE__.": ".__METHOD__." without access_token in config, it must be set in app code");
 		} else $this->access_token = $this->config['spark']['access_token'];
 
 		if (!isset($this->config['spark']['backoff']) || !is_bool((bool) $this->config['spark']['backoff'])) $this->logger->addWarning(__FILE__.": ".__METHOD__." missing configuration parameters: backoff");
@@ -406,8 +420,12 @@ class Spark {
 
 			// keep tokens fresh
 			if (
-				!$this->is_sparkbot_io
-				&& $next_token_check <= time()) {
+				$next_token_check <= time()
+				&& (
+					!$this->is_sparkbot
+					|| !empty($this->access_token)
+					)
+				) {
 				if (!empty($tokens = $this->get_bot_tokens()))
 					$this->set_tokens($tokens['access_token'], $tokens['expires_in'], $tokens['refresh_token'], $tokens['refresh_token_expires_in'], false);
 				else
@@ -3896,28 +3914,38 @@ class Spark {
 			if (!file_exists(dirname($this->token_file))) {
 			   if (!mkdir(dirname($this->token_file), 0660, true)) {
 					$this->logger->addError(__FILE__.": ".__METHOD__.": can't create directory: ".dirname($this->token_file));
+					$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+					return false;
 				}
 			}
 			if (!file_exists($this->token_file)) {
 				if (!touch($this->token_file)) {
 					$this->logger->addError(__FILE__.": ".__METHOD__.": can't create file: ".$this->token_file);
+					$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+					return false;
 				}
 			}
 			if (!chmod($this->token_file, 0640)) {
 				$this->logger->addError(__FILE__.": ".__METHOD__.": can't chmod file to 0640: ".$this->token_file);
 			}
-			if (!file_put_contents($this->token_file, json_encode($this->tokens))) 
+			if (!file_put_contents($this->token_file, json_encode($this->tokens))) {
 				$this->logger->addError(__FILE__.": ".__METHOD__.": failed to write tokens to disk");
-			else {
+				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+				return false;
+			} else {
 				if (file_exists($this->token_file.'.lock')) {
 					$this->logger->addInfo(__FILE__.": ".__METHOD__.": found get_bot_tokens lock file");
 					if (unlink($this->token_file.'.lock'))
 						$this->logger->addInfo(__FILE__.": ".__METHOD__.": removed get_bot_tokens lock file");
-					else
+					else {
 						$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't remove get_bot_tokens lock file");
+						$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+						return false;
+					}
 				}
 			}
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return true;
 		}
 	}
 
