@@ -51,7 +51,9 @@ class Callback extends Collectable {
 		}
 
 		$this->extensions = $extensions;
+		unset($extensions);
 		$this->details = $details;
+		unset($details);
 
       $this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 
@@ -93,6 +95,7 @@ class Callback extends Collectable {
 		unset($storage);
 
 		unset($spark);
+		unset($this->details);
 		unset($this->callback);
 
       $this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
