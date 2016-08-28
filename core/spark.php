@@ -4546,10 +4546,16 @@ class Spark {
 			unset($event);
       }
 
-		if (empty(file_put_contents($this->cache_file, json_encode($this->cache, JSON_PRETTY_PRINT), LOCK_EX))) {
+		$cache = $this->cache;
+		if (!empty($cache['memberships_room_person'])) unset($cache['memberships_room_person']);
+		if (!empty($cache['memberships_room'])) unset($cache['memberships_room']);
+		if (!empty($cache['memberships'])) unset($cache['memberships']);
+		if (empty(file_put_contents($this->cache_file, json_encode($cache)))) {
+			unset($cache);
 			$this->logger->addCritical(__FILE__.": ".__METHOD__.": !!! couldn't write to ".$this->cache_file.", bot can't maintain cache if restarted. !!!");
 			return false;
 		} else $this->cache_updated = false;
+		unset($cache);
 
 		$this->logger->addInfo(__FILE__.": ".__METHOD__.": saved cache");
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
