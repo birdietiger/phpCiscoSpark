@@ -3,6 +3,7 @@
 class Spark {
 
 	protected $cache_updated = false;
+	protected $cache;
 	protected $access_token;
 	protected $is_sparkbot = false;
 	protected $sparkbot_domains = [ 'sparkbot.io' ];
@@ -4123,6 +4124,12 @@ class Spark {
 		return $this->observe('phone', $observations, $help, $functions);
 	}
 
+	public function observe_cache($observations, $help, $functions) {
+		$observations = $this->check_for_observations($observations);
+		$help = $this->check_for_help($help);
+		return $this->observe('cache', $observations, $help, $functions);
+	}
+
 	public function observe_boton($observations, $help, $functions) {
 		$observations = $this->check_for_observations($observations);
 		$help = $this->check_for_help($help);
@@ -4522,6 +4529,22 @@ class Spark {
 		if (!$this->cache_updated) return false;
 
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": cache has been updated, so need to save");
+
+      if (!empty($this->bot_triggers['cache']['enabled']['callbacks'])) {
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": executing cache callbacks");
+			$event = new StdClass();
+			$event->cache = $this->cache;
+         foreach ($this->bot_triggers['cache']['enabled']['callbacks'] as $callback) {
+            if ($this->multithreaded) {
+               $this->worker_pool->submit(
+                  new Callback($callback, $this, $this->logger, $this->storage, $this->extensions, $event)
+                  );
+            } else {
+               $callback($this, $this->logger, $this->storage, $this->extensions, $event);
+            }
+         }
+			unset($event);
+      }
 
 		if (empty(file_put_contents($this->cache_file, json_encode($this->cache, JSON_PRETTY_PRINT), LOCK_EX))) {
 			$this->logger->addCritical(__FILE__.": ".__METHOD__.": !!! couldn't write to ".$this->cache_file.", bot can't maintain cache if restarted. !!!");
