@@ -2,6 +2,7 @@
 
 class Spark {
 
+	protected $get_me_web = true;
 	protected $cache_updated = false;
 	protected $cache;
 	protected $access_token;
@@ -3858,6 +3859,9 @@ class Spark {
       if (empty($this->config['spark']['ipc_channel_psk'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: ipc_channel_psk");
       else $this->ipc_channel_psk = $this->config['spark']['ipc_channel_psk'];
 
+		if (!isset($this->config['spark']['get_me_web']) || !is_bool((bool) $this->config['spark']['get_me_web'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: get_me_web");
+		else $this->get_me_web = (bool) $this->config['spark']['get_me_web'];
+
 		if (!isset($this->config['spark']['get_room_membership']) || !is_bool((bool) $this->config['spark']['get_room_membership'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: get_room_membership");
 		else $this->get_room_membership = (bool) $this->config['spark']['get_room_membership'];
 
@@ -3939,6 +3943,13 @@ class Spark {
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return false;
 		}
+		if (
+			!$this->is_cli
+			&& !$this->get_me_web
+			) {
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": this is web and get_me_web is false, not getting people/me for bot");
+			$get_me = false;
+		}
 		if ($get_me) {
 			if (empty($this->me = $this->spark_api('GET', 'people', $this->api_url.'people/me', null, $access_token))) {
 				$this->logger->addCritical(__FILE__.": ".__METHOD__.": couldn't get me when setting access_token");
@@ -3956,7 +3967,7 @@ class Spark {
 			'refresh_token_expires_in' => $refresh_token_expires_in,
 			);
 
-		if (!empty($this->token_file)) {
+		if (empty($this->access_token) && !empty($this->token_file)) {
 			if (!file_exists(dirname($this->token_file))) {
 			   if (!mkdir(dirname($this->token_file), 0660, true)) {
 					$this->logger->addError(__FILE__.": ".__METHOD__.": can't create directory: ".dirname($this->token_file));
@@ -3990,9 +4001,10 @@ class Spark {
 					}
 				}
 			}
-			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return true;
 		}
+
+		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+		return true;
 	}
 
 	public function get_bot_tokens($access_code = false) {
