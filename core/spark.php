@@ -3023,6 +3023,28 @@ class Spark {
 			return false;
 		}
 
+		if (
+			empty($this->webhook_direct) 
+			&& (
+					(
+					$webhook_message['resource'] == 'rooms'
+					&& !empty($webhook_message['data']['type'])
+					&& $webhook_message['data']['type'] == 'direct'
+					)
+				||
+					(
+					$webhook_message['resource'] == 'messages'
+					&& !empty($webhook_message['data']['roomType'])
+					&& $webhook_message['data']['roomType'] == 'direct'
+					)
+				)
+			) {
+			$this->logger->addInfo(__FILE__.": ".__METHOD__.": room is direct and webhook_direct is false");
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return false;
+		}
+
+
 		$event = new StdClass();
 		$event->webhooks = $webhook_message;
 		$event->permissions = [];
@@ -3310,48 +3332,63 @@ class Spark {
 		}
 
 		if (
+			!empty($event->rooms)
+			&& $event->rooms['type'] == 'direct'
+			&& empty($this->webhook_direct) 
+			) {
+			$this->logger->addInfo(__FILE__.": ".__METHOD__.": room is direct and webhook_direct is false");
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return false;
+		}
+
+		if (
 			$webhook_message['resource'] == 'memberships' 
 			&& $webhook_message['event'] == 'created'
 			&& $webhook_message['data']['personId'] == $this->me['id']
 			) {
 
-			$this->enabled_rooms[$event->rooms['id']] = $this->default_enabled_room;
+			$this->enabled_rooms[$webhook_message['data']['roomId']] = $this->default_enabled_room;
 
 			if (
-				$this->get_room_type == 'all'
-				|| (
-					!empty($event->rooms['type'])
-					&& $this->get_room_type == $event->rooms['type']
+				!empty($event->rooms)
+				&& (
+					$this->get_room_type == 'all'
+					|| (
+						!empty($event->rooms['type'])
+						&& $this->get_room_type == $event->rooms['type']
+						)
 					)
 				) {
-				$this->logger->addInfo(__FILE__.": ".__METHOD__.": adding new room to existing_rooms: ".$event->rooms['id']);
-				$this->existing_rooms[$event->rooms['id']] = $event->rooms;
-			}
 
-			if ($this->new_room_announce) {
-				if ($this->default_enabled_room)
-						$text = "I'm ready to go. /help to get started."; 
-				else {
-					$text = "An admin or super user needs to enable me with /bot/on. Here are my admins: ";
-					foreach ($this->admins as $admin) {
-						if (!empty(in_array($admin, $this->super_admins))) $text .= $admin."*, ";
-						else $text .= $admin.", ";
-					}
-					$text = rtrim($text, ', ');
-				}
-				$this->messages('POST', [ 'roomId' => $webhook_message['data']['roomId'], 'text' => $text ]);
-			}
+				$this->logger->addInfo(__FILE__.": ".__METHOD__.": adding new room to existing_rooms: ".$webhook_message['data']['roomId']);
+				$this->existing_rooms[$webhook_message['data']['roomId']] = $event->rooms;
 
-			if (!empty($this->bot_triggers['newroom']['enabled']['callbacks'])) {
-				foreach ($this->bot_triggers['newroom']['enabled']['callbacks'] as $callback) {
-					if ($this->multithreaded) {
-						$this->worker_pool->submit(
-							new Callback($callback, $this, $this->logger, $this->storage, $this->extensions, $event)
-							);
-					} else {
-						$callback($this, $this->logger, $this->storage, $this->extensions, $event);
+				if ($this->new_room_announce) {
+					if ($this->default_enabled_room)
+							$text = "I'm ready to go. /help to get started."; 
+					else {
+						$text = "An admin or super user needs to enable me with /bot/on. Here are my admins: ";
+						foreach ($this->admins as $admin) {
+							if (!empty(in_array($admin, $this->super_admins))) $text .= $admin."*, ";
+							else $text .= $admin.", ";
+						}
+						$text = rtrim($text, ', ');
+					}
+					$this->messages('POST', [ 'roomId' => $webhook_message['data']['roomId'], 'text' => $text ]);
+				}
+
+				if (!empty($this->bot_triggers['newroom']['enabled']['callbacks'])) {
+					foreach ($this->bot_triggers['newroom']['enabled']['callbacks'] as $callback) {
+						if ($this->multithreaded) {
+							$this->worker_pool->submit(
+								new Callback($callback, $this, $this->logger, $this->storage, $this->extensions, $event)
+								);
+						} else {
+							$callback($this, $this->logger, $this->storage, $this->extensions, $event);
+						}
 					}
 				}
+
 			}
 
 		}
@@ -3377,16 +3414,6 @@ class Spark {
             if (!empty($this->enabled_rooms[$event->rooms['id']])) unset($this->enabled_rooms[$event->rooms['id']]);
             if (!empty($this->enabled_rooms_file)) $this->save_state_file($this->enabled_rooms_file, $this->enabled_rooms);
 			}
-		}
-
-		if (
-			!empty($event->rooms['type'])
-			&& $event->rooms['type'] == 'direct'
-			&& empty($this->webhook_direct) 
-			) {
-			$this->logger->addInfo(__FILE__.": ".__METHOD__.": room is direct and webhook_direct is false");
-			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
 		}
 
 		if (
