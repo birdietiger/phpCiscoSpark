@@ -424,7 +424,7 @@ class Spark {
 				$next_token_check <= time()
 				&& (
 					!$this->is_sparkbot
-					|| !empty($this->access_token)
+					|| empty($this->access_token)
 					)
 				) {
 				if (!empty($tokens = $this->get_bot_tokens()))
@@ -2455,9 +2455,18 @@ class Spark {
 			}
 		}
 
-		if (!empty($this->bot_triggers['person']) && !empty($event->people['emails'])) {
+		if (
+			!empty($this->bot_triggers['person'])
+			&& (
+				!empty($event->people['emails'])
+				|| !empty($event->people['actor']['emails'])
+				)
+			) {
 			foreach ($this->bot_triggers['person'] as $bot_person_email => $bot_person_params) {
-				if (in_array($bot_person_email, $event->people['emails'])) {
+				if (
+					(!empty($event->people['emails']) && in_array($bot_person_email, $event->people['emails']))
+					|| (!empty($event->people['actor']['emails']) && in_array($bot_person_email, $event->people['actor']['emails']))
+					) {
 					if ($this->multithreaded) $this->collect_worker_garbage();
 					foreach ($bot_person_params['callbacks'] as $callback) {
 						if ($this->multithreaded) {
@@ -3204,32 +3213,38 @@ class Spark {
 			&& empty($event->$webhook_message['resource'] = $this->$webhook_message['resource']('GET', array($id_name => $webhook_message['data']['id'])))
 			) $this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook resource details: id name: $id_name id: ".$webhook_message['data']['id']);
 
-		if (
-			$this->get_all_webhook_data == true
-			&& !empty($event->$webhook_message['resource'])
-			) {
-			$this->logger->addInfo(__FILE__.": ".__METHOD__.": getting all webhook data from all endpoints");
-			foreach ($event->$webhook_message['resource'] as $resource_detail_key => $resource_detail_value) {
-				if (!empty($endpoint_id_names[$resource_detail_key])) {
-					if ($webhook_message['event'] == 'deleted') {
-						if ($endpoint_id_names[$resource_detail_key] == $webhook_message['resource']) {
-							$event->$endpoint_id_names[$resource_detail_key] = $webhook_message['data'];
-						} else if (
-							$webhook_message['resource'] == 'memberships'
-							&& $endpoint_id_names[$resource_detail_key] == 'rooms'
-							&& $webhook_message['data']['personId'] == $this->me['id']
-							) {
-							$event->rooms = [ 'id' => $webhook_message['data']['roomId'] ];
+		if ($this->get_all_webhook_data == true) {
+
+			if (!empty($event->$webhook_message['resource'])) {
+				$this->logger->addInfo(__FILE__.": ".__METHOD__.": getting all webhook data from all endpoints");
+				foreach ($event->$webhook_message['resource'] as $resource_detail_key => $resource_detail_value) {
+					if (!empty($endpoint_id_names[$resource_detail_key])) {
+						if ($webhook_message['event'] == 'deleted') {
+							if ($endpoint_id_names[$resource_detail_key] == $webhook_message['resource']) {
+								$event->$endpoint_id_names[$resource_detail_key] = $webhook_message['data'];
+							} else if (
+								$webhook_message['resource'] == 'memberships'
+								&& $endpoint_id_names[$resource_detail_key] == 'rooms'
+								&& $webhook_message['data']['personId'] == $this->me['id']
+								) {
+								$event->rooms = [ 'id' => $webhook_message['data']['roomId'] ];
+							}
 						}
-					}
-					if (empty($event->$endpoint_id_names[$resource_detail_key])) {
-						$get_resource_params = array($resource_detail_key => $resource_detail_value);
-						//if ($endpoint_id_names[$resource_detail_key] == 'rooms') $get_resource_params['showSipAddress'] = true;
-						if (empty($event->$endpoint_id_names[$resource_detail_key] = $this->$endpoint_id_names[$resource_detail_key]('GET', $get_resource_params))) 
-							$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook resource details: id name: ".$resource_detail_key." id: ".$resource_detail_value);
+						if (empty($event->$endpoint_id_names[$resource_detail_key])) {
+							$get_resource_params = array($resource_detail_key => $resource_detail_value);
+							//if ($endpoint_id_names[$resource_detail_key] == 'rooms') $get_resource_params['showSipAddress'] = true;
+							if (empty($event->$endpoint_id_names[$resource_detail_key] = $this->$endpoint_id_names[$resource_detail_key]('GET', $get_resource_params))) 
+								$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook resource details: id name: ".$resource_detail_key." id: ".$resource_detail_value);
+						}
 					}
 				}
 			}
+
+			if (!empty($webhook_message['actorId'])) {
+				if (empty($event->people['actor'] = $this->people('GET', [ 'personId' => $webhook_message['actorId'] ]))) 
+					$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook resource details: actorId ".$webhook_message['actorId']);
+			}
+
 			if (!empty($event->rooms['id'])) {
 
 				if (
@@ -3265,9 +3280,9 @@ class Spark {
 					if (empty($event->memberships = $this->memberships('GET', array('roomId' => $event->rooms['id'], 'personId' => $event->people['id']))))
 						$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook memberships resource details: roomId: ".$event->rooms['id']." personId: ".$event->people['id']);
 				}
-
+	
 			}
-
+	
 			if (!empty($event->updated)) {
 				foreach ($event->updated as $resource => $orig_data) {
 					$updated = false;
