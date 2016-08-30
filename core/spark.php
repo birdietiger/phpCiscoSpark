@@ -112,7 +112,10 @@ class Spark {
 		}
 		$this->extensions->http = $this->curl = new Curl($this->logger);
 
-		if (class_exists('Callback')) $this->multithreaded = true;
+		if (class_exists('Callback')) {
+			$this->logger->addInfo(__FILE__.": ".__METHOD__.": multithreaded system");
+			$this->multithreaded = true;
+		}
 
 		$this->is_cli = $this->is_cli();
 		if (!$this->is_cli) {
