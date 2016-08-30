@@ -327,6 +327,9 @@ class Spark {
 		if (!isset($this->config['spark']['backoff']) || !is_bool((bool) $this->config['spark']['backoff'])) $this->logger->addWarning(__FILE__.": ".__METHOD__." missing configuration parameters: backoff");
 		else $this->backoff = (bool) $this->config['spark']['backoff'];
 
+		if (!isset($this->config['spark']['get_me_web']) || !is_bool((bool) $this->config['spark']['get_me_web'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: get_me_web");
+		else $this->get_me_web = (bool) $this->config['spark']['get_me_web'];
+
 	}
 
 	public function listen() {
@@ -3858,9 +3861,6 @@ class Spark {
 
       if (empty($this->config['spark']['ipc_channel_psk'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: ipc_channel_psk");
       else $this->ipc_channel_psk = $this->config['spark']['ipc_channel_psk'];
-
-		if (!isset($this->config['spark']['get_me_web']) || !is_bool((bool) $this->config['spark']['get_me_web'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: get_me_web");
-		else $this->get_me_web = (bool) $this->config['spark']['get_me_web'];
 
 		if (!isset($this->config['spark']['get_room_membership']) || !is_bool((bool) $this->config['spark']['get_room_membership'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: get_room_membership");
 		else $this->get_room_membership = (bool) $this->config['spark']['get_room_membership'];
