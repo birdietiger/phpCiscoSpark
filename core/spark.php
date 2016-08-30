@@ -4578,11 +4578,7 @@ class Spark {
 	protected function save_cache() {
 		$function_start = \function_start();
 
-		if (empty($this->cache_file)) return false;
-
 		if (!$this->cache_updated) return false;
-
-		$this->logger->addDebug(__FILE__.": ".__METHOD__.": cache has been updated, so need to save");
 
       if (!empty($this->bot_triggers['cache']['enabled']['callbacks'])) {
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": executing cache callbacks");
@@ -4599,6 +4595,10 @@ class Spark {
          }
 			unset($event);
       }
+
+		if (empty($this->cache_file)) return false;
+
+		$this->logger->addDebug(__FILE__.": ".__METHOD__.": cache has been updated, so need to save");
 
 		$cache = $this->cache;
 		if (!empty($cache['memberships_room_person'])) unset($cache['memberships_room_person']);
