@@ -67,7 +67,7 @@ class Curl {
 			foreach ($header_lines as $index => $header_line) {
 				if ($index == 0 || empty($header_line)) continue;
 				$header_elements = explode(":", $header_line, 2);
-				$header_array[strtolower($header_elements[0])] = $header_elements[1];
+				$header_array[strtolower($header_elements[0])] = (!empty($header_elements[1])) ? $header_elements[1] : '';
 			}
 			$body = substr($response, $header_length);
 			$this->logger->addDebug($this->caller.": ".__FILE__.": ".__METHOD__.": response body: $body");
