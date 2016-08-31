@@ -115,7 +115,8 @@ class Spark {
 		if (class_exists('Callback')) {
 			$this->logger->addInfo(__FILE__.": ".__METHOD__.": multithreaded system");
 			$this->multithreaded = true;
-		}
+		} else
+			$this->logger->addInfo(__FILE__.": ".__METHOD__.": *not* multithreaded system");
 
 		$this->is_cli = $this->is_cli();
 		if (!$this->is_cli) {
@@ -172,9 +173,11 @@ class Spark {
 			foreach ($this->bot_triggers['stop']['enabled']['callbacks'] as $callback) {
 				register_shutdown_function(function() use ($callback) {
 					if ($this->multithreaded) {
+						$temp_cache = $this->cache; unset($this->cache);
 						$this->worker_pool->submit(
 							new Callback($callback, $this, $this->logger, $this->storage, $this->extensions, null)
 							);
+						$this->cache = $temp_cache; unset($temp_cache);
 					} else {
 						$callback($this, $this->logger, $this->storage, $this->extensions, null);
 					}
@@ -333,6 +336,9 @@ class Spark {
 		if (!isset($this->config['spark']['get_me_web']) || !is_bool((bool) $this->config['spark']['get_me_web'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: get_me_web");
 		else $this->get_me_web = (bool) $this->config['spark']['get_me_web'];
 
+		if (!isset($this->config['spark']['enable_cache']) || !is_bool((bool) $this->config['spark']['enable_cache'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: enable_cache");
+		else $this->enable_cache = (bool) $this->config['spark']['enable_cache'];
+
 	}
 
 	public function listen() {
@@ -396,7 +402,7 @@ class Spark {
 				$callback($this, $this->logger, $this->storage, $this->extensions, null);
       }
 
-		$this->save_cache();
+		if ($this->enable_cache) $this->save_cache();
 
 		$this->logger->addAlert(__FILE__.": ".__METHOD__.": BOT is running");
 
@@ -518,8 +524,12 @@ class Spark {
 	}
 
 	protected function collect_worker_garbage() {
+		$function_start = \function_start();
+
 		$this->worker_pool->collect(function(Callback $job){
+			$function_start = \function_start();
 			if ($job->isGarbage()) {
+				$this->logger->addDebug(__FILE__.": Spark::collect_worker_garbage: collecting worker pool garbage");
 				$perm_diff = array_diff_assoc_recursive($job->storage->perm, $job->storage_perm_orig);
 				$this->storage->perm = array_replace_recursive($this->storage->perm, $perm_diff);
 				$temp_diff = array_diff_assoc_recursive($job->storage->temp, $job->storage_temp_orig);
@@ -532,8 +542,10 @@ class Spark {
 				}
 				unset($job->storage);
 			}
+			$this->logger->addDebug(__FILE__.": Spark::collect_worker_garbage: ".\function_end($function_start));
 			return $job->isGarbage();
 		});
+
 	}
 
 	protected function set_me_mention_regex() {
@@ -1859,9 +1871,11 @@ class Spark {
 		if (!empty($this->bot_triggers['boton']['enabled']['callbacks'])) {
 			foreach ($this->bot_triggers['boton']['enabled']['callbacks'] as $callback) {
 				if ($this->multithreaded) {
+					$temp_cache = $this->cache; unset($this->cache);
 					$this->worker_pool->submit(
 						new Callback($callback, $this, $this->logger, $this->storage, $this->extensions, $event)
 						);
+					$this->cache = $temp_cache; unset($temp_cache);
 				} else {
 					$callback($this, $this->logger, $this->storage, $this->extensions, $event);
 				}
@@ -2204,9 +2218,11 @@ class Spark {
 								$callbacks[] = $callback;
 							$this->report_spark_slow($event->rooms['id']);
 							if ($this->multithreaded && $bot_command != $this->bot_control_command) {
+								$temp_cache = $this->cache; unset($this->cache);
 								$this->worker_pool->submit(
 									new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
 									);
+								$this->cache = $temp_cache; unset($temp_cache);
 							} else {
 								$callback($spark, $logger, $this->storage, $extensions, $event);
 							}
@@ -2237,9 +2253,11 @@ class Spark {
 				foreach ($callbacks as $callback) {
 					$this->report_spark_slow($event->rooms['id']);
 					if ($this->multithreaded) {
+						$temp_cache = $this->cache; unset($this->cache);
 						$this->worker_pool->submit(
 							new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
 							);
+						$this->cache = $temp_cache; unset($temp_cache);
 					} else {
 						$callback($spark, $logger, $this->storage, $extensions, $event);
 					}
@@ -2276,9 +2294,11 @@ class Spark {
 					foreach ($this->bot_triggers['command']['help']['callbacks'] as $callback) {
 						$this->report_spark_slow($event->rooms['id']);
 						if ($this->multithreaded) {
+							$temp_cache = $this->cache; unset($this->cache);
 							$this->worker_pool->submit(
 								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
 								);
+							$this->cache = $temp_cache; unset($temp_cache);
 						} else {
 							$callback($spark, $logger, $this->storage, $extensions, $event);
 						}
@@ -2300,9 +2320,11 @@ class Spark {
 					if ($this->multithreaded) $this->collect_worker_garbage();
 					foreach ($callbacks as $callback) {
 						if ($this->multithreaded) {
+							$temp_cache = $this->cache; unset($this->cache);
 							$this->worker_pool->submit(
 								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
 								);
+							$this->cache = $temp_cache; unset($temp_cache);
 						} else {
 							$callback($spark, $logger, $this->storage, $extensions, $event);
 						}
@@ -2326,9 +2348,11 @@ class Spark {
 					if ($this->multithreaded) $this->collect_worker_garbage();
 					foreach ($callbacks as $callback) {
 						if ($this->multithreaded) {
+							$temp_cache = $this->cache; unset($this->cache);
 							$this->worker_pool->submit(
 								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
 								);
+							$this->cache = $temp_cache; unset($temp_cache);
 						} else {
 							$callback($spark, $logger, $this->storage, $extensions, $event);
 						}
@@ -2351,9 +2375,11 @@ class Spark {
 					if ($this->multithreaded) $this->collect_worker_garbage();
 					foreach ($callbacks as $callback) {
 						if ($this->multithreaded) {
+							$temp_cache = $this->cache; unset($this->cache);
 							$this->worker_pool->submit(
 								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
 								);
+							$this->cache = $temp_cache; unset($temp_cache);
 						} else {
 							$callback($spark, $logger, $this->storage, $extensions, $event);
 						}
@@ -2377,9 +2403,11 @@ class Spark {
 					if ($this->multithreaded) $this->collect_worker_garbage();
 					foreach ($callbacks as $callback) {
 						if ($this->multithreaded) {
+							$temp_cache = $this->cache; unset($this->cache);
 							$this->worker_pool->submit(
 								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
 								);
+							$this->cache = $temp_cache; unset($temp_cache);
 						} else {
 							$callback($spark, $logger, $this->storage, $extensions, $event);
 						}
@@ -2402,9 +2430,11 @@ class Spark {
 					if ($this->multithreaded) $this->collect_worker_garbage();
 					foreach ($callbacks as $callback) {
 						if ($this->multithreaded) {
+							$temp_cache = $this->cache; unset($this->cache);
 							$this->worker_pool->submit(
 								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
 								);
+							$this->cache = $temp_cache; unset($temp_cache);
 						} else {
 							$callback($spark, $logger, $this->storage, $extensions, $event);
 						}
@@ -2429,9 +2459,11 @@ class Spark {
 				if ($this->multithreaded) $this->collect_worker_garbage();
 				foreach ($bot_files_string_params['callbacks'] as $callback) {
 					if ($this->multithreaded) {
+						$temp_cache = $this->cache; unset($this->cache);
 						$this->worker_pool->submit(
 							new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
 							);
+						$this->cache = $temp_cache; unset($temp_cache);
 					} else {
 						$callback($spark, $logger, $this->storage, $extensions, $event);
 					}
@@ -2451,9 +2483,11 @@ class Spark {
 					if ($this->multithreaded) $this->collect_worker_garbage();
 					foreach ($bot_webhook_resource_event_params['callbacks'] as $callback) {
 						if ($this->multithreaded) {
+							$temp_cache = $this->cache; unset($this->cache);
 							$this->worker_pool->submit(
 								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
 								);
+							$this->cache = $temp_cache; unset($temp_cache);
 						} else {
 							$callback($spark, $logger, $this->storage, $extensions, $event);
 						}
@@ -2477,9 +2511,11 @@ class Spark {
 					if ($this->multithreaded) $this->collect_worker_garbage();
 					foreach ($bot_person_params['callbacks'] as $callback) {
 						if ($this->multithreaded) {
+							$temp_cache = $this->cache; unset($this->cache);
 							$this->worker_pool->submit(
 								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
 								);
+							$this->cache = $temp_cache; unset($temp_cache);
 						} else {
 							$callback($spark, $logger, $this->storage, $extensions, $event);
 						}
@@ -2511,9 +2547,11 @@ class Spark {
 				if ($this->multithreaded) $this->collect_worker_garbage();
 				foreach ($callbacks as $callback) {
 					if ($this->multithreaded) {
+						$temp_cache = $this->cache; unset($this->cache);
 						$this->worker_pool->submit(
 							new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
 							);
+						$this->cache = $temp_cache; unset($temp_cache);
 					} else {
 						$callback($spark, $logger, $this->storage, $extensions, $event);
 					}
@@ -2966,9 +3004,11 @@ class Spark {
 		if ($this->multithreaded) $this->collect_worker_garbage();
 		foreach ($params['callbacks'] as $callback) {
 			if ($this->multithreaded) {
+				$temp_cache = $this->cache; unset($this->cache);
 				$this->worker_pool->submit(
 					new Callback($callback, $this, $this->logger, $this->storage, $this->extensions, $event)
 					);
+				$this->cache = $temp_cache; unset($temp_cache);
 			} else {
 				$callback($this, $this->logger, $this->storage, $this->extensions, $event);
 			}
@@ -2992,9 +3032,11 @@ class Spark {
 		if ($this->multithreaded) $this->collect_worker_garbage();
 		foreach ($params['callbacks'] as $callback) {
 			if ($this->multithreaded) {
+				$temp_cache = $this->cache; unset($this->cache);
 				$this->worker_pool->submit(
 					new Callback($callback, $this, $this->logger, $this->storage, $this->extensions, $event)
 					);
+				$this->cache = $temp_cache; unset($temp_cache);
 			} else {
 				$callback($this, $this->logger, $this->storage, $this->extensions, $event);
 			}
@@ -3387,9 +3429,11 @@ class Spark {
 				if (!empty($this->bot_triggers['newroom']['enabled']['callbacks'])) {
 					foreach ($this->bot_triggers['newroom']['enabled']['callbacks'] as $callback) {
 						if ($this->multithreaded) {
+							$temp_cache = $this->cache; unset($this->cache);
 							$this->worker_pool->submit(
 								new Callback($callback, $this, $this->logger, $this->storage, $this->extensions, $event)
 								);
+							$this->cache = $temp_cache; unset($temp_cache);
 						} else {
 							$callback($this, $this->logger, $this->storage, $this->extensions, $event);
 						}
@@ -3431,9 +3475,11 @@ class Spark {
 			) {
 			foreach ($this->bot_triggers['botmessage']['enabled']['callbacks'] as $callback) {
 				if ($this->multithreaded) {
+					$temp_cache = $this->cache; unset($this->cache);
 					$this->worker_pool->submit(
 						new Callback($callback, $this, $this->logger, $this->storage, $this->extensions, $event)
 						);
+					$this->cache = $temp_cache; unset($temp_cache);
 				} else {
 					$callback($this, $this->logger, $this->storage, $this->extensions, $event);
 				}
@@ -3886,9 +3932,6 @@ class Spark {
 		if (!isset($this->config['spark']['webhook_direct']) || !is_bool((bool) $this->config['spark']['webhook_direct'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: webhook_direct");
 		else $this->webhook_direct = (bool) $this->config['spark']['webhook_direct'];
 
-		if (!isset($this->config['spark']['enable_cache']) || !is_bool((bool) $this->config['spark']['enable_cache'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: enable_cache");
-		else $this->enable_cache = (bool) $this->config['spark']['enable_cache'];
-
       if (empty($this->config['spark']['cache_saves_in'])) $this->logger->addWarning(__FILE__.": missing configuration parameters: cache_saves_in");
       else $this->loop_timers['save_cache'] = $this->config['spark']['cache_saves_in'];
 
@@ -3904,7 +3947,7 @@ class Spark {
 			if ($this->enable_cache) $this->logger->addError(__FILE__.": !!! no file to save cache. this will impact bot performance if restarted !!!");
 		} else $this->cache_file = $this->config['spark']['cache_file'];
 
-		if (!empty($this->cache_file)) {
+		if ($this->enable_cache && !empty($this->cache_file)) {
 			if (!empty($settings = $this->load_state_file('cache_file'))) {
 				$this->cache = $settings;
 				if (!empty($this->cache['memberships_room_person'])) unset($this->cache['memberships_room_person']);
@@ -4589,9 +4632,11 @@ class Spark {
 			$event->cache = $this->cache;
          foreach ($this->bot_triggers['cache']['enabled']['callbacks'] as $callback) {
             if ($this->multithreaded) {
+					$temp_cache = $this->cache; unset($this->cache);
                $this->worker_pool->submit(
                   new Callback($callback, $this, $this->logger, $this->storage, $this->extensions, $event)
                   );
+					$this->cache = $temp_cache; unset($temp_cache);
             } else {
                $callback($this, $this->logger, $this->storage, $this->extensions, $event);
             }

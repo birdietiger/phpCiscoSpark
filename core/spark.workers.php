@@ -33,29 +33,30 @@ class Callback extends Collectable {
 
 	public function __construct($callback, $spark, $logger, $storage, $extensions, $details) {
 
-      $function_start = \function_start();
+		$function_start = \function_start();
 
-		$this->callback = $callback;
-		$this->spark = clone $spark;
-		unset($spark);
 		$spark_helper_logger = new \SparkHelperLogger();
 		$this->logger = $spark_helper_logger->use_basic($logger->config);
 		unset($logger);
-		$this->storage = $storage;
-		$this->storage_perm_orig = $this->storage->perm;
-		$this->storage_temp_orig = $this->storage->temp;
-		foreach ($this->spark->config['extensions'] as $extension => $extension_state) {
+
+		$this->callback = $callback;
+		foreach ($spark->config['extensions'] as $extension => $extension_state) {
 			if (!empty($extension_state)) {
 				$this->$extension = $this->storage->$extension;
 			}
 		}
+		$this->spark = clone $spark;
+		unset($spark);
+		$this->storage = $storage;
+		$this->storage_perm_orig = $this->storage->perm;
+		$this->storage_temp_orig = $this->storage->temp;
 
 		$this->extensions = $extensions;
 		unset($extensions);
 		$this->details = $details;
 		unset($details);
 
-      $this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 
 	}
 
