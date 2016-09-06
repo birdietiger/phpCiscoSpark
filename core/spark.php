@@ -2790,7 +2790,7 @@ class Spark {
 		}
 
 		if (!empty($user = $this->spark_api('GET', 'people', $this->api_url.'people/me', null, $access_token))) {
-			if (in_array($email, $user['emails'])) {
+			if (in_array(strtolower($email), $user['emails'])) {
 				$this->logger->addInfo(__FILE__.": ".__METHOD__.": access_token is associated with user: $email");
 				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 				return $user;
