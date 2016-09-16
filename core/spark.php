@@ -2,6 +2,9 @@
 
 class Spark {
 
+	protected $phone_regex = '/[\(\+]?\d[\d\s\-\.\(\)]*\d{2}[\d\s\-\.\(\)]*\d(\s*(x|e|ex|ext|extension)\.?\s*\d+)?/i';
+	protected $email_regex = '/(?!(?:(?:\x22?\x5C[\x00-\x7E]\x22?)|(?:\x22?[^\x5C\x22]\x22?)){255,})(?!(?:(?:\x22?\x5C[\x00-\x7E]\x22?)|(?:\x22?[^\x5C\x22]\x22?)){65,}@)(?:(?:[\x21\x23-\x27\x2A\x2B\x2D\x2F-\x39\x3D\x3F\x5E-\x7E]+)|(?:\x22(?:[\x01-\x08\x0B\x0C\x0E-\x1F\x21\x23-\x5B\x5D-\x7F]|(?:\x5C[\x00-\x7F]))*\x22))(?:\.(?:(?:[\x21\x23-\x27\x2A\x2B\x2D\x2F-\x39\x3D\x3F\x5E-\x7E]+)|(?:\x22(?:[\x01-\x08\x0B\x0C\x0E-\x1F\x21\x23-\x5B\x5D-\x7F]|(?:\x5C[\x00-\x7F]))*\x22)))*@(?:(?:(?!.*[^.]{64,})(?:(?:(?:xn--)?[a-z0-9]+(?:-[a-z0-9]+)*\.){1,126}){1,}(?:(?:[a-z][a-z0-9]*)|(?:(?:xn--)[a-z0-9]+))(?:-[a-z0-9]+)*)|(?:\[(?:(?:IPv6:(?:(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){7})|(?:(?!(?:.*[a-f0-9][:\]]){7,})(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){0,5})?::(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){0,5})?)))|(?:(?:IPv6:(?:(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){5}:)|(?:(?!(?:.*[a-f0-9]:){5,})(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){0,3})?::(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){0,3}:)?)))?(?:(?:25[0-5])|(?:2[0-4][0-9])|(?:1[0-9]{2})|(?:[1-9]?[0-9]))(?:\.(?:(?:25[0-5])|(?:2[0-4][0-9])|(?:1[0-9]{2})|(?:[1-9]?[0-9]))){3}))\]))/iD';
+	protected $url_regex = '_(?:(?:[a-z]+):///?)(?:\S+(?::\S*)?@)?(?:(?!10(?:\.\d{1,3}){3})(?!127(?:\.\d{1,3}){3})(?!169\.254(?:\.\d{1,3}){2})(?!192\.168(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z\x{00a1}-\x{ffff}0-9]+-?)*[a-z\x{00a1}-\x{ffff}0-9]+)(?:\.(?:[a-z\x{00a1}-\x{ffff}0-9]+-?)*[a-z\x{00a1}-\x{ffff}0-9]+)*(?:\.(?:[a-z\x{00a1}-\x{ffff}]{2,})))(?::\d{2,5})?(?:/[^\s]*)?_iuS';
 	protected $get_me_web = true;
 	protected $cache_updated = false;
 	protected $cache;
@@ -2346,8 +2349,7 @@ class Spark {
 				$event->matches = [];
 				$callbacks = [];
 				foreach ($this->bot_triggers['email'] as $bot_email => $bot_email_params) {
-					$email_regex = '/(?!(?:(?:\x22?\x5C[\x00-\x7E]\x22?)|(?:\x22?[^\x5C\x22]\x22?)){255,})(?!(?:(?:\x22?\x5C[\x00-\x7E]\x22?)|(?:\x22?[^\x5C\x22]\x22?)){65,}@)(?:(?:[\x21\x23-\x27\x2A\x2B\x2D\x2F-\x39\x3D\x3F\x5E-\x7E]+)|(?:\x22(?:[\x01-\x08\x0B\x0C\x0E-\x1F\x21\x23-\x5B\x5D-\x7F]|(?:\x5C[\x00-\x7F]))*\x22))(?:\.(?:(?:[\x21\x23-\x27\x2A\x2B\x2D\x2F-\x39\x3D\x3F\x5E-\x7E]+)|(?:\x22(?:[\x01-\x08\x0B\x0C\x0E-\x1F\x21\x23-\x5B\x5D-\x7F]|(?:\x5C[\x00-\x7F]))*\x22)))*@(?:(?:(?!.*[^.]{64,})(?:(?:(?:xn--)?[a-z0-9]+(?:-[a-z0-9]+)*\.){1,126}){1,}(?:(?:[a-z][a-z0-9]*)|(?:(?:xn--)[a-z0-9]+))(?:-[a-z0-9]+)*)|(?:\[(?:(?:IPv6:(?:(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){7})|(?:(?!(?:.*[a-f0-9][:\]]){7,})(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){0,5})?::(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){0,5})?)))|(?:(?:IPv6:(?:(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){5}:)|(?:(?!(?:.*[a-f0-9]:){5,})(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){0,3})?::(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){0,3}:)?)))?(?:(?:25[0-5])|(?:2[0-4][0-9])|(?:1[0-9]{2})|(?:[1-9]?[0-9]))(?:\.(?:(?:25[0-5])|(?:2[0-4][0-9])|(?:1[0-9]{2})|(?:[1-9]?[0-9]))){3}))\]))/iD';
-					if (preg_match_all($email_regex, $event->messages['text'], $matches)) {
+					if (preg_match_all($this->email_regex, $event->messages['text'], $matches)) {
 						$event->matches = array_unique(array_merge($matches[0], $event->matches));
 						$callbacks = array_unique(array_merge($bot_email_params['callbacks'], $callbacks));
 					}
@@ -2373,8 +2375,7 @@ class Spark {
 				$event->matches = [];
 				$callbacks = [];
 				foreach ($this->bot_triggers['phone'] as $bot_phone => $bot_phone_params) {
-					$phone_regex = '/[\(\+]?\d[\d\s\-\.\(\)]*\d{2}[\d\s\-\.\(\)]*\d(\s*(x|e|ex|ext|extension)\.?\s*\d+)?/i';
-					if (preg_match_all($phone_regex, $event->messages['text'], $matches)) {
+					if (preg_match_all($this->phone_regex, $event->messages['text'], $matches)) {
 						$event->matches = array_unique(array_merge($matches[0], $event->matches));
 						$callbacks = array_unique(array_merge($bot_phone_params['callbacks'], $callbacks));
 					}
@@ -2401,8 +2402,7 @@ class Spark {
 				$event->matches = [];
 				$callbacks = [];
 				foreach ($this->bot_triggers['url'] as $bot_url => $bot_url_params) {
-					$url_regex = '_(?:(?:[a-z]+):///?)(?:\S+(?::\S*)?@)?(?:(?!10(?:\.\d{1,3}){3})(?!127(?:\.\d{1,3}){3})(?!169\.254(?:\.\d{1,3}){2})(?!192\.168(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z\x{00a1}-\x{ffff}0-9]+-?)*[a-z\x{00a1}-\x{ffff}0-9]+)(?:\.(?:[a-z\x{00a1}-\x{ffff}0-9]+-?)*[a-z\x{00a1}-\x{ffff}0-9]+)*(?:\.(?:[a-z\x{00a1}-\x{ffff}]{2,})))(?::\d{2,5})?(?:/[^\s]*)?_iuS';
-					if (preg_match_all($url_regex, $event->messages['text'], $matches)) {
+					if (preg_match_all($this->url_regex, $event->messages['text'], $matches)) {
 						$event->matches = array_unique(array_merge($matches[0], $event->matches));
 						$callbacks = array_unique(array_merge($bot_url_params['callbacks'], $callbacks));
 					}
@@ -2450,6 +2450,27 @@ class Spark {
 				}
 				unset($event->matches);
 				unset($callbacks);
+			}
+
+			if (
+				isset($event->nlp)
+				&& !empty($event->nlp['question'])
+				&& !empty($this->bot_triggers['question'])
+				) {
+				foreach ($this->bot_triggers['question'] as $bot_question => $bot_question_params) {
+					if ($this->multithreaded) $this->collect_worker_garbage();
+					foreach ($bot_question_params['callbacks'] as $callback) {
+						if ($this->multithreaded) {
+							$temp_cache = $this->cache; unset($this->cache);
+							$this->worker_pool->submit(
+								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+								);
+							$this->cache = $temp_cache; unset($temp_cache);
+						} else {
+							$callback($spark, $logger, $this->storage, $extensions, $event);
+						}
+					}
+				}
 			}
 
 		}
@@ -3389,6 +3410,18 @@ class Spark {
 		}
 
 		if (
+			!empty($event->messages['text'])
+			&& !empty($this->nlp)
+			) {
+			if (empty($nlp = $this->nlp->analyze($event->messages['text']))) {
+				$this->logger->addWarning(__FILE__.": ".__METHOD__.": couldn't complete NLP analysis");
+			} else {
+				$this->logger->addInfo(__FILE__.": ".__METHOD__.": completed NLP analysis on message text");
+				$event->nlp = $nlp;
+			}
+		}
+
+		if (
 			!empty($event->rooms)
 			&& $event->rooms['type'] == 'direct'
 			&& empty($this->webhook_direct) 
@@ -4198,6 +4231,12 @@ class Spark {
 		return $this->observe('email', $observations, $help, $functions);
 	}
 
+	public function observe_question($observations, $help, $functions) {
+		$observations = $this->check_for_observations($observations);
+		$help = $this->check_for_help($help);
+		return $this->observe('question', $observations, $help, $functions);
+	}
+
 	public function observe_phone($observations, $help, $functions) {
 		$observations = $this->check_for_observations($observations);
 		$help = $this->check_for_help($help);
@@ -4428,8 +4467,7 @@ class Spark {
 	}
 
 	public function is_phonenumber($string) {
-		$regexp = '/[\(\+]?\d[\d\s\-\.\(\)]*\d{2}[\d\s\-\.\(\)]*\d(\s*(x|e|ex|ext|extension)\.?\s*\d+)?/i';
-		if (preg_match($regexp, $string)) return true;
+		if (preg_match($this->phone_regex, $string)) return true;
 		else return false;
 	}
 

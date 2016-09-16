@@ -22,6 +22,7 @@ if (!is_file(__DIR__.'/install.lock')) die("EMERGENCY: You need to install phpCi
 require_once __DIR__ . '/core/logging.php';
 require_once __DIR__ . '/core/storage.php';
 require_once __DIR__ . '/core/utils.php';
+require_once __DIR__ . '/core/nlp.php';
 require_once __DIR__ . '/core/curl.php';
 require_once __DIR__ . '/core/oauth.php';
 require_once __DIR__ . '/core/spark.php';
