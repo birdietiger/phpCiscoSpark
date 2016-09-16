@@ -1,51 +1,12 @@
 <?php
 
-class SparkHelperLogger {
-
-	public function use_monolog($config = null) {
-
-		//require composer autoload to get monolog running
-		if (file_exists(__DIR__ . '/vendor/autoload.php'))
-			require __DIR__ . '/vendor/autoload.php';
-		else {
-			echo "ERROR: monolog autoload file is missing. starting basic logging to keep things moving forward.\n";
-			return $this->use_basic($config);
-		}
-
-		$log_file_level = (!empty($config['file_level'])) ? $config['file_level'] : 'ERROR';
-		$log_stdout_level = (!empty($config['stdout_level'])) ? $config['stdout_level'] : 'ERROR';
-		$logger = new \Monolog\Logger(basename(__FILE__));
-		$log_format = "[%datetime%] ".uniqid()." %channel%.%level_name%: %message% %context% %extra%\n";
-		$log_formatter = new \Monolog\Formatter\LineFormatter($log_format);
-		if (!empty($config['file'])) {
-			$log_file_handler = new \Monolog\Handler\StreamHandler($config['file'], constant('\Monolog\Logger::'.$log_file_level));
-			$log_file_handler->setFormatter($log_formatter);
-			$logger->pushHandler($log_file_handler);
-		}
-		if (isset($config['stdout']) && $config['stdout']) {
-			$log_stdout_handler = new \Monolog\Handler\StreamHandler('php://stdout', constant('\Monolog\Logger::'.$log_stdout_level));
-			$log_stdout_handler->setFormatter($log_formatter);
-			$logger->pushHandler($log_stdout_handler);
-		}
-		return $logger;
-
-	}
-
-	public function use_basic($config = null) {
-	
-		return new \BasicLogger($config);
-
-	}
-
-}
-
 class BasicLogger {
 
 	public $config = array();
 	public $stdout = true;
-	protected $stdout_level = 'ERROR';
+	public $stdout_level = 'ERROR';
+	public $file_level = 'ERROR';
 	protected $file = '';
-	protected $file_level = 'ERROR';
 	protected $uniqid;
 	protected $levels = array(
 		'DEBUG' => 0,

@@ -31,12 +31,11 @@ class Spark {
 	protected $broker;
 	protected $storage;
 	protected $spark_endpoints;
-	protected $files_storage;
 	protected $extensions;
 	protected $new_room_announce = true;
-	public $api_url;
+	public $api_url = 'https://api.ciscospark.com/v1/';
 	protected $message_version;
-	public $tokens_url;
+	public $tokens_url = 'https://api.ciscospark.com/v1/access_token';
 	public $oauth_redirect_uri;
 	public $client_id;
 	public $client_secret;
@@ -77,7 +76,7 @@ class Spark {
 	protected $detect_malformed_commands = true;
 	protected $delete_last_help = true;
    protected $user_management = false;
-	public $backoff = false;
+	public $backoff = true;
 	protected $report_slow = false;
    protected $default_enabled_room = false;
    protected $default_require_mention = false;
@@ -87,12 +86,12 @@ class Spark {
 	protected $webhook_direct = true;
 	protected $get_room_type = 'all';
 	protected $room_types = ['all', 'direct', 'group'];
+	protected $nlp;
 
-   public function __construct($logger = null, $config = null, $files_storage = null, $extensions = null, $storage = null, $broker = null) {
+   public function __construct($logger = null, $config = null, $extensions = null, $storage = null, $broker = null) {
 		$function_start = \function_start();
 		$this->logger = $logger;
 		$this->config = $config;
-		$this->files_storage = $files_storage;
 		$this->extensions = $extensions;
 		$this->storage = $storage;
 		$this->broker = $broker;
@@ -111,6 +110,15 @@ class Spark {
 			exit();
 		}
 		$this->extensions->http = $this->curl = new Curl($this->logger);
+
+		if (!class_exists('NLP')) 
+			$this->logger->addWarning(__FILE__.": ".__METHOD__.": NLP class is missing");
+		else {
+			if (!empty($this->config['nlp']))
+				$this->nlp = new \NLP($this->logger, $this->config['nlp']);
+			else
+				$this->nlp = new \NLP($this->logger);
+		}
 
 		if (class_exists('Callback')) {
 			$this->logger->addInfo(__FILE__.": ".__METHOD__.": multithreaded system");
@@ -304,7 +312,7 @@ class Spark {
 		if (empty($this->config['spark']['api_url'])) $this->logger->addWarning(__FILE__.": ".__METHOD__." missing configuration parameters: api_url");
 		else $this->api_url = $this->config['spark']['api_url'];
 
-		if (empty($this->message_version = preg_replace("/^.*\/v([0-9]+)\/$/", "$1", $this->config['spark']['api_url']))) 
+		if (empty($this->message_version = preg_replace("/^.*\/v([0-9]+)\/$/", "$1", $this->api_url))) 
 			$this->logger->addWarning(__FILE__.": ".__METHOD__." missing api version from api_url");
 
 		if (empty($this->config['spark']['tokens_url'])) $this->logger->addWarning(__FILE__.": ".__METHOD__." missing configuration parameters: tokens_url");
@@ -2365,7 +2373,7 @@ class Spark {
 				$event->matches = [];
 				$callbacks = [];
 				foreach ($this->bot_triggers['phone'] as $bot_phone => $bot_phone_params) {
-					$phone_regex = '/[\(\+]\d[\d\s\-\.\((\)]*\d{2}[\d\s\-\.\(\)]*\d(\s*x\s*\d+)?/i';
+					$phone_regex = '/[\(\+]?\d[\d\s\-\.\(\)]*\d{2}[\d\s\-\.\(\)]*\d(\s*(x|e|ex|ext|extension)\.?\s*\d+)?/i';
 					if (preg_match_all($phone_regex, $event->messages['text'], $matches)) {
 						$event->matches = array_unique(array_merge($matches[0], $event->matches));
 						$callbacks = array_unique(array_merge($bot_phone_params['callbacks'], $callbacks));
@@ -2790,7 +2798,7 @@ class Spark {
 		}
 
 		if (!empty($user = $this->spark_api('GET', 'people', $this->api_url.'people/me', null, $access_token))) {
-			if (in_array(strtolower($email), $user['emails'])) {
+			if (in_array(strtolower($email), array_map('strtolower', $user['emails']))) {
 				$this->logger->addInfo(__FILE__.": ".__METHOD__.": access_token is associated with user: $email");
 				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 				return $user;
@@ -3561,37 +3569,9 @@ class Spark {
 	protected function prepare_message_files($params) {
 		$function_start = \function_start();
 
-			if (
-				!empty($params['files']) && 
-				is_file($params['files'][0]) &&
-				class_exists($this->files_storage->class)
-				) {
-				$this->logger->addInfo(__FILE__.": ".__METHOD__.": getting ready to upload temp files to files_storage");
-				$files_storage = new $this->files_storage->class($this->logger, $this->config);
-				$pid = pcntl_fork();
-				if ($pid === -1) {
-					$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't create child process");
-				} elseif ($pid === 0) {
-					$this->logger->addDebug(__FILE__.": ".__METHOD__.": created child process");
-					if (empty($files_storage->delete_temp_subfolders()))
-						$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't clean up temp folder");
-					else
-						$this->logger->addInfo(__FILE__.": ".__METHOD__.": cleaned up temp folder");
-					exit();
-				} else {
-					// parent
-					if (empty($file_id = $files_storage->temp_upload($params['files'][0]))) {
-						$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't do a temp upload");
-					} else if (empty($file_url = $files_storage->create_shared_link($file_id))) {
-						$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't create shared link for temp upload");
-					} else $params['files'] = array($file_url);
-				}
-				unset($files_storage);
-			}
-			if (!empty($params['files'])) $this->logger->addDebug(__FILE__.": ".__METHOD__.": files: ".serialize($params['files']));
-			$this->logger->addInfo(__FILE__.": ".__METHOD__.": prepared message files");
-			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return $params;
+		$this->logger->addInfo(__FILE__.": ".__METHOD__.": todo");
+		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+		return $params;
 
 	}
 
@@ -4448,7 +4428,7 @@ class Spark {
 	}
 
 	public function is_phonenumber($string) {
-		$regexp = '/[\(\+]\d[\d\s\-\.\((\)]*\d{2}[\d\s\-\.\(\)]*\d(\s*x\s*\d+)?/i';
+		$regexp = '/[\(\+]?\d[\d\s\-\.\(\)]*\d{2}[\d\s\-\.\(\)]*\d(\s*(x|e|ex|ext|extension)\.?\s*\d+)?/i';
 		if (preg_match($regexp, $string)) return true;
 		else return false;
 	}

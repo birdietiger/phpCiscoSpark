@@ -86,6 +86,7 @@ class Curl {
 								&& preg_match('/rel="next"\s*$/', $header_array['link']) > 0
 								) {
 								$this->url = preg_replace('/^\s*<(.+)>.*$/', '\1', $header_array['link']);
+								$this->url = preg_replace('/([\?&])max=null(&|$)/', '$1$2', $this->url);
 								$this->logger->addInfo($this->caller.": ".__FILE__.": ".__METHOD__.": paginating using ".$this->url);
 								if (empty($new_data = $this->request())) {
 									$this->logger->addError($this->caller.": ".__FILE__.": ".__METHOD__.": paginating failed");

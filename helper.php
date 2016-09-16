@@ -24,7 +24,6 @@ require_once __DIR__ . '/core/storage.php';
 require_once __DIR__ . '/core/utils.php';
 require_once __DIR__ . '/core/curl.php';
 require_once __DIR__ . '/core/oauth.php';
-require_once __DIR__ . '/core/files_storage.php';
 require_once __DIR__ . '/core/spark.php';
 require_once __DIR__ . '/core/extensions.php';
 require_once __DIR__ . '/core/encryption.php';
@@ -34,8 +33,8 @@ if (is_file($app_conf_file)) $config = $orig_config = parse_ini_file($app_conf_f
 else die("EMERGENCY: Missing the configuration file: $app_conf_file\nINFO: See '".__DIR__."/README.md'\n");
 
 // setup logging with config
-$spark_helper_logger = new \SparkHelperLogger();
-$logger = $spark_helper_logger->use_basic($config['log']);
+$log_config = (!empty($config['log'])) ? $config['log'] : null;
+$logger = new \BasicLogger($log_config);
 
 // collect missing passwords, which could be excluded from the config file for security purposes
 if (($config = collect_missing_passwords($orig_config)) === false) {
@@ -52,13 +51,16 @@ if (($config = collect_missing_passwords($orig_config)) === false) {
 $config['config_file'] = $app_conf_file;
 
 // setup object to store perm and temp data
-$storage = new \Storage($logger, $config['storage']);
+if (!empty($config['storage'])) 
+	$storage = new \Storage($logger, $config['storage']);
+else
+	$storage = new StdClass();
 
 // load extensions
-if (!empty($config['extensions'])) $extensions = new \Extensions($logger, $app_conf_dir, $config['extensions'], $storage);
-
-// setup storage for files
-$files_storage = new \FilesStorage($logger, $config);
+if (!empty($config['extensions']))
+	$extensions = new \Extensions($logger, $app_conf_dir, $config['extensions'], $storage);
+else
+	$extensions = new StdClass();
 
 // setup multithread if supported 
 if (class_exists('Thread')) require_once __DIR__ . '/core/spark.workers.php';
@@ -73,12 +75,12 @@ if (!empty($config['broker']['class']) && !empty($config['broker']['host'])) {
 	$broker = new \MessageBroker($logger, $config);
 
 	// setup spark with broker
-	$spark = new \Spark($logger, $config, $files_storage, $extensions, $storage, $broker);
+	$spark = new \Spark($logger, $config, $extensions, $storage, $broker);
 
 } else {
 
 	// setup spark without broker
-	$spark = new \Spark($logger, $config, $files_storage, $extensions, $storage);
+	$spark = new \Spark($logger, $config, $extensions, $storage);
 
 }
 
