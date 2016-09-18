@@ -180,8 +180,8 @@ class Spark {
 				]);
 		}
 
-		if (!empty($this->bot_triggers['stop']['enabled']['callbacks'])) {
-			foreach ($this->bot_triggers['stop']['enabled']['callbacks'] as $callback) {
+		if (!empty($this->bot_triggers['stop']['<<--ENABLED-->>']['callbacks'])) {
+			foreach ($this->bot_triggers['stop']['<<--ENABLED-->>']['callbacks'] as $callback) {
 				register_shutdown_function(function() use ($callback) {
 					if ($this->multithreaded) {
 						$temp_cache = $this->cache; unset($this->cache);
@@ -408,8 +408,8 @@ class Spark {
 			$this->worker_pool = new WorkerPool($this->threads, \CallbackWorker::class);//, [$this->config, $this->logger]);
 		}
 
-		if (!empty($this->bot_triggers['start']['enabled']['callbacks'])) {
-			foreach ($this->bot_triggers['start']['enabled']['callbacks'] as $callback)
+		if (!empty($this->bot_triggers['start']['<<--ENABLED-->>']['callbacks'])) {
+			foreach ($this->bot_triggers['start']['<<--ENABLED-->>']['callbacks'] as $callback)
 				$callback($this, $this->logger, $this->storage, $this->extensions, null);
       }
 
@@ -914,7 +914,7 @@ class Spark {
 				'qos' => 0,
 				'function' => array($this, 'parse_ipc_message'),
 				'params' => array(
-					'callbacks' => $this->bot_triggers['ipc']['enabled']['callbacks'],
+					'callbacks' => $this->bot_triggers['ipc']['<<--ENABLED-->>']['callbacks'],
 					),
 				);
 			$this->logger->addInfo(__FILE__.": ".__METHOD__.": IPC channel topic: ".$topic);
@@ -1879,8 +1879,8 @@ class Spark {
 		$this->enabled_rooms[$event->rooms['id']] = true;
 		$this->logger->addInfo(__FILE__.": ".__METHOD__.": enabled room: ".$event->rooms['id']);
 
-		if (!empty($this->bot_triggers['boton']['enabled']['callbacks'])) {
-			foreach ($this->bot_triggers['boton']['enabled']['callbacks'] as $callback) {
+		if (!empty($this->bot_triggers['boton']['<<--ENABLED-->>']['callbacks'])) {
+			foreach ($this->bot_triggers['boton']['<<--ENABLED-->>']['callbacks'] as $callback) {
 				if ($this->multithreaded) {
 					$temp_cache = $this->cache; unset($this->cache);
 					$this->worker_pool->submit(
@@ -1969,7 +1969,7 @@ class Spark {
 			else
 				$text = "I'm not sure what you meant with the command, **".$event->command['name']."**. ";
 		}
-		if ($this->direct_help) $text .= "Since you're a **moderator**, you can use these commands in **".$event->rooms['title']."**\n\n";
+		if ($this->direct_help) $text .= "Since you're a **moderator**, you can use these commands in **".$event->rooms['title']."** \n\n";
 		else $text .= "Since you're a **moderator**, you can use these commands\n\n";
 		foreach ($spark->bot_triggers['modcommand'] as $bot_command => $bot_command_details) {
 			if (empty($bot_command_details['label'])) continue;
@@ -2459,20 +2459,30 @@ class Spark {
 				&& !empty($event->nlp['question'])
 				&& !empty($this->bot_triggers['question'])
 				) {
-				foreach ($this->bot_triggers['question'] as $bot_question => $bot_question_params) {
-					if ($this->multithreaded) $this->collect_worker_garbage();
-					foreach ($bot_question_params['callbacks'] as $callback) {
-						if ($this->multithreaded) {
-							$temp_cache = $this->cache; unset($this->cache);
-							$this->worker_pool->submit(
-								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
-								);
-							$this->cache = $temp_cache; unset($temp_cache);
-						} else {
-							$callback($spark, $logger, $this->storage, $extensions, $event);
+				$event->matches = [];
+				$callbacks = [];
+				foreach ($this->bot_triggers['question'] as $bot_search_string => $bot_search_string_params) {
+					if ($bot_search_string != '<<--ENABLED-->>') {
+						if (preg_match_all("/$bot_search_string/i", $event->messages['text'], $matches)) {
+							$event->matches = array_unique(array_merge($matches[0], $event->matches));
+							$callbacks = array_unique(array_merge($bot_search_string_params['callbacks'], $callbacks));
 						}
+					} else $callbacks = array_merge($bot_search_string_params['callbacks'], $callbacks);
+				}
+				if ($this->multithreaded) $this->collect_worker_garbage();
+				foreach ($callbacks as $callback) {
+					if ($this->multithreaded) {
+						$temp_cache = $this->cache; unset($this->cache);
+						$this->worker_pool->submit(
+							new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+							);
+						$this->cache = $temp_cache; unset($temp_cache);
+					} else {
+						$callback($spark, $logger, $this->storage, $extensions, $event);
 					}
 				}
+				unset($event->matches);
+				unset($callbacks);
 			}
 
 		}
@@ -3246,7 +3256,7 @@ class Spark {
 			$this->storage->perm['message_count'][$webhook_message['data']['roomId']] = (!isset($this->storage->perm['message_count'][$webhook_message['data']['roomId']])) ? 0 : $this->storage->perm['message_count'][$webhook_message['data']['roomId']]+1;
 
 			if ($webhook_message['data']['personId'] == $this->me['id']) {
-				if (!empty($this->bot_triggers['botmessage']['enabled']['callbacks']))
+				if (!empty($this->bot_triggers['botmessage']['<<--ENABLED-->>']['callbacks']))
 					$this->logger->addDebug(__FILE__.": ".__METHOD__.": botmessage observation set, so parsing message from bot");
 				else {
 					$this->logger->addDebug(__FILE__.": ".__METHOD__.": skipping message that the bot created");
@@ -3469,8 +3479,8 @@ class Spark {
 					$this->messages('POST', [ 'roomId' => $webhook_message['data']['roomId'], 'text' => $text ]);
 				}
 
-				if (!empty($this->bot_triggers['newroom']['enabled']['callbacks'])) {
-					foreach ($this->bot_triggers['newroom']['enabled']['callbacks'] as $callback) {
+				if (!empty($this->bot_triggers['newroom']['<<--ENABLED-->>']['callbacks'])) {
+					foreach ($this->bot_triggers['newroom']['<<--ENABLED-->>']['callbacks'] as $callback) {
 						if ($this->multithreaded) {
 							$temp_cache = $this->cache; unset($this->cache);
 							$this->worker_pool->submit(
@@ -3514,9 +3524,9 @@ class Spark {
 			$webhook_message['resource'] == 'messages' 
 			&& $webhook_message['event'] == 'created'
 			&& $webhook_message['data']['personId'] == $this->me['id']
-			&& !empty($this->bot_triggers['botmessage']['enabled']['callbacks'])
+			&& !empty($this->bot_triggers['botmessage']['<<--ENABLED-->>']['callbacks'])
 			) {
-			foreach ($this->bot_triggers['botmessage']['enabled']['callbacks'] as $callback) {
+			foreach ($this->bot_triggers['botmessage']['<<--ENABLED-->>']['callbacks'] as $callback) {
 				if ($this->multithreaded) {
 					$temp_cache = $this->cache; unset($this->cache);
 					$this->worker_pool->submit(
@@ -4443,7 +4453,7 @@ class Spark {
 			die();
 		}
 
-		if (empty($observations)) $observations = ['enabled'];
+		if (empty($observations)) $observations = ['<<--ENABLED-->>'];
 		if (empty($help)) $help = ['',''];
 		foreach ($observations as $key => $observation) {
 			if ($key > 0) $help = ['',''];
@@ -4646,11 +4656,11 @@ class Spark {
 
 		if (!$this->cache_updated) return false;
 
-      if (!empty($this->bot_triggers['cache']['enabled']['callbacks'])) {
+      if (!empty($this->bot_triggers['cache']['<<--ENABLED-->>']['callbacks'])) {
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": executing cache callbacks");
 			$event = new StdClass();
 			$event->cache = $this->cache;
-         foreach ($this->bot_triggers['cache']['enabled']['callbacks'] as $callback) {
+         foreach ($this->bot_triggers['cache']['<<--ENABLED-->>']['callbacks'] as $callback) {
             if ($this->multithreaded) {
 					$temp_cache = $this->cache; unset($this->cache);
                $this->worker_pool->submit(
