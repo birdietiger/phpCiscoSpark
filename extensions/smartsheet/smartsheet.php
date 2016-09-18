@@ -654,7 +654,7 @@ class Smartsheet {
 
 	}
 
-	public function publish_sheet($sheet_id, $read = true, $read_who = 'ALL', $write = false, $write_who = 'ORG', $ical = false) {
+	public function publish_sheet($sheet_id, $read_lite = true, $read_full = true, $read_who = 'ALL', $write = false, $write_who = 'ORG', $ical = false) {
 		$function_start = \function_start();
 
 		if (empty($this->access_token)) {
@@ -671,8 +671,8 @@ class Smartsheet {
 		$url = "https://api.smartsheet.com/2.0/sheets/".$sheet_id."/publish";
 
 		$params = array(
-			'readOnlyLiteEnabled' => $read,
-			'readOnlyFullEnabled' => $read,
+			'readOnlyLiteEnabled' => $read_lite,
+			'readOnlyFullEnabled' => $read_full,
 			'readWriteEnabled' => $write,
 			'icalEnabled' => $ical,
 			);
