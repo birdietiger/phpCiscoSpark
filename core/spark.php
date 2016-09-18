@@ -2318,6 +2318,8 @@ class Spark {
 				}
 			}
 
+			if ($any_commands_found) $event->command = true;
+
 			if (!empty($this->bot_triggers['hashtag'])) {
 				$event->matches = [];
 				$callbacks = [];
