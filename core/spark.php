@@ -552,8 +552,8 @@ class Spark {
 					}
 				}
 				unset($job->storage);
+				$this->logger->addDebug(__FILE__.": Spark::collect_worker_garbage: ".\function_end($function_start));
 			}
-			$this->logger->addDebug(__FILE__.": Spark::collect_worker_garbage: ".\function_end($function_start));
 			return $job->isGarbage();
 		});
 
@@ -2567,11 +2567,11 @@ class Spark {
 
 		if (
 			!empty($this->bot_triggers['search'])
-			&& $webhook_message['resource'] == 'rooms' 
+			&& $event->webhooks['resource'] == 'rooms' 
 			&& (
-				$webhook_message['event'] == 'created'
+				$event->webhooks['event'] == 'created'
 				|| (
-					$webhook_message['event'] == 'updated'
+					$event->webhooks['event'] == 'updated'
 					&& $this->room_before_update['title'] != $event->rooms['title']
 					)
 				)
