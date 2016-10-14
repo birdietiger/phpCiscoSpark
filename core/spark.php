@@ -583,6 +583,36 @@ class Spark {
 		return $this->spark_api($method, $api, $api_url, $params);
 	}
 
+	public function teams($method, $params = null) {
+		$function_start = \function_start();
+		$api = 'teams';
+      if (empty(list($api_url, $params) = $this->prepare_params($api, $method, $params))) {
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return false;
+		}
+      if (!$this->validate_params($api, $method, $params)) {
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return false;
+		}
+		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+		return $this->spark_api($method, $api, $api_url, $params);
+	}
+
+	public function team_memberships($method, $params = null) {
+		$function_start = \function_start();
+		$api = 'team_memberships';
+      if (empty(list($api_url, $params) = $this->prepare_params($api, $method, $params))) {
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return false;
+		}
+      if (!$this->validate_params($api, $method, $params)) {
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return false;
+		}
+		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+		return $this->spark_api($method, $api, $api_url, $params);
+	}
+
 	public function rooms($method, $params = null) {
 		$function_start = \function_start();
 		$api = 'rooms';
