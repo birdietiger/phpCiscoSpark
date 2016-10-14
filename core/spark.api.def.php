@@ -207,6 +207,135 @@ $spark_endpoints = array(
 				),
 			),
 		
+		'memberships' => array(
+			'/' => array(
+				'GET' => array(
+					'description' => 'Lists all room memberships. By default, lists memberships for rooms to which the authenticated user belongs.',
+					'headers' => array(
+						'Content-type' => 'application/json',
+						),
+					'params' => array(
+						'roomId' => array(
+							'type' => 'id',
+							),
+						'personId' => array(
+							'type' => 'id',
+							),
+						'personEmail' => array(
+							'type' => 'email',
+							),
+						'max' => array(
+							'type' => 'integer',
+							'min' => 1,
+							'max' => 1000,
+							'default' => 100,
+							),
+						),
+					'required' => array(
+						'and' => array(
+							),
+						'or' => array(
+							),
+						),
+					'response' => $spark_apis_get_put_post_http_codes,
+					),
+				'POST' => array(
+					'description' => 'Add someone to a room by Person ID or email address; optionally making them a moderator.',
+					'headers' => array(
+						'Content-type' => 'application/json',
+						),
+					'params' => array(
+						'roomId' => array(
+							'type' => 'id',
+							),
+						'personId' => array(
+							'type' => 'id',
+							),
+						'personEmail' => array(
+							'type' => 'email',
+							),
+						'isModerator' => array(
+							'type' => 'boolean',
+							),
+						),
+					'required' => array(
+						'and' => array(
+							'roomId',
+							),
+						'or' => array(
+							'personId',
+							'personEmail',
+							),
+						),
+					'response' => $spark_apis_get_put_post_http_codes,
+					),
+				),
+		
+			'/{membershipId}' => array(
+				'GET' => array(
+					'description' => 'Get details for a membership by ID.',
+					'headers' => array(
+						'Content-type' => 'application/json',
+						),
+					'params' => array(
+						'membershipId' => array(
+							'type' => 'id',
+							),
+						),
+					'required' => array(
+						'and' => array(
+							'membershipId',
+							),
+						'or' => array(
+							),
+						),
+					'response' => $spark_apis_get_put_post_http_codes,
+					),
+				'PUT' => array(
+					'description' => 'Updates properties for a membership by ID.',
+					'headers' => array(
+						'Content-type' => 'application/json',
+						),
+					'params' => array(
+						'membershipId' => array(
+							'type' => 'id',
+							),
+						'isModerator' => array(
+							'type' => 'boolean',
+							),
+						),
+					'required' => array(
+						'and' => array(
+							'isModerator',
+							'membershipId',
+							),
+						'or' => array(
+							),
+						),
+					'response' => $spark_apis_get_put_post_http_codes,
+					),
+				'DELETE' => array(
+					'description' => 'Deletes a membership by ID.',
+					'headers' => array(
+						'Content-type' => 'application/json',
+						),
+					'params' => array(
+						'membershipId' => array(
+							'type' => 'id',
+							),
+						),
+					'required' => array(
+						'and' => array(
+							'membershipId',
+							),
+						'or' => array(
+							),
+						),
+					'response' => $spark_apis_delete_http_codes,
+					),
+				),
+			),
+		
 		'rooms' => array(
 			'/' => array(
 				'GET' => array(
@@ -326,22 +455,16 @@ $spark_endpoints = array(
 				),
 			),
 		
-		'memberships' => array(
+		'team_memberships' => array(
 			'/' => array(
 				'GET' => array(
-					'description' => 'Lists all room memberships. By default, lists memberships for rooms to which the authenticated user belongs.',
+					'description' => 'Lists all team memberships. By default, lists memberships for teams to which the authenticated user belongs.',
 					'headers' => array(
 						'Content-type' => 'application/json',
 						),
 					'params' => array(
-						'roomId' => array(
+						'teamId' => array(
 							'type' => 'id',
-							),
-						'personId' => array(
-							'type' => 'id',
-							),
-						'personEmail' => array(
-							'type' => 'email',
 							),
 						'max' => array(
 							'type' => 'integer',
@@ -352,6 +475,7 @@ $spark_endpoints = array(
 						),
 					'required' => array(
 						'and' => array(
+							'teamId',
 							),
 						'or' => array(
 							),
@@ -359,12 +483,12 @@ $spark_endpoints = array(
 					'response' => $spark_apis_get_put_post_http_codes,
 					),
 				'POST' => array(
-					'description' => 'Add someone to a room by Person ID or email address; optionally making them a moderator.',
+					'description' => 'Add someone to a team by Person ID or email address; optionally making them a moderator.',
 					'headers' => array(
 						'Content-type' => 'application/json',
 						),
 					'params' => array(
-						'roomId' => array(
+						'teamId' => array(
 							'type' => 'id',
 							),
 						'personId' => array(
@@ -379,7 +503,7 @@ $spark_endpoints = array(
 						),
 					'required' => array(
 						'and' => array(
-							'roomId',
+							'teamId',
 							),
 						'or' => array(
 							'personId',

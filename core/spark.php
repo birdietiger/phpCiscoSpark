@@ -3647,7 +3647,7 @@ class Spark {
 			return false;
 		}
 
-		$api_url = $this->api_url.$api;
+		$api_url = $this->api_url.str_replace('_', '/', $api);
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": api_url: $api_url");
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": message_version: $this->message_version");
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": api: $api");
