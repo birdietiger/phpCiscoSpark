@@ -103,6 +103,110 @@ $spark_endpoints = array(
 				),
 			),
 
+		'teams' => array(
+			'/' => array(
+				'GET' => array(
+					'description' => 'Lists teams to which the authenticated user belongs.',
+					'headers' => array(
+						'Content-type' => 'application/json',
+						),
+					'params' => array(
+						'max' => array(
+							'type' => 'integer',
+							'min' => 1,
+							'max' => 100000,
+							),
+						),
+					'required' => array(
+						'and' => array(
+							),
+						'or' => array(
+							),
+						),
+					'response' => $spark_apis_get_put_post_http_codes,
+					),
+				'POST' => array(
+					'description' => 'Creates a team.',
+					'headers' => array(
+						'Content-type' => 'application/json',
+						),
+					'params' => array(
+						'name' => array(
+							'type' => 'string',
+							),
+						),
+					'required' => array(
+						'and' => array(
+							'name',
+							),
+						'or' => array(
+							),
+						),
+					'response' => $spark_apis_get_put_post_http_codes,
+					),
+				),
+		
+			'/{teamId}' => array(
+				'GET' => array(
+					'description' => 'Shows details for a team, by ID.',
+					'headers' => array(
+						'Content-type' => 'application/json',
+						),
+					'params' => array(
+						'teamId' => array(
+							'type' => 'id',
+							),
+						),
+					'required' => array(
+						'and' => array(
+							'teamId',
+							),
+						'or' => array(
+							),
+						),
+					'response' => $spark_apis_get_put_post_http_codes,
+					),
+				'PUT' => array(
+					'description' => 'Updates details for a team, by ID.',
+					'headers' => array(
+						'Content-type' => 'application/json',
+						),
+					'params' => array(
+						'name' => array(
+							'type' => 'string',
+							),
+						),
+					'required' => array(
+						'and' => array(
+							'name',
+							),
+						'or' => array(
+							),
+						),
+					'response' => $spark_apis_get_put_post_http_codes,
+					),
+				'DELETE' => array(
+					'description' => 'Deletes a team, by ID.',
+					'headers' => array(
+						'Content-type' => 'application/json',
+						),
+					'params' => array(
+						'teamId' => array(
+							'type' => 'id',
+							),
+						),
+					'required' => array(
+						'and' => array(
+							'teamId',
+							),
+						'or' => array(
+							),
+						),
+					'response' => $spark_apis_delete_http_codes,
+					),
+				),
+			),
+		
 		'rooms' => array(
 			'/' => array(
 				'GET' => array(
