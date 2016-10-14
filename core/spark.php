@@ -2182,6 +2182,32 @@ class Spark {
 
 	public function bot_process_webhook($spark, $logger, $storage, $extensions, $event) {
 		$function_start = \function_start();
+
+		if (!empty($this->bot_triggers['webhook'])) {
+			foreach ($this->bot_triggers['webhook'] as $bot_webhook_resource_event => $bot_webhook_resource_event_params) {
+				list($bot_webhook_resource, $bot_webhook_event) = explode('_', $bot_webhook_resource_event);
+				if (
+					$bot_webhook_resource == 'all' && $bot_webhook_event == 'all'
+					|| $bot_webhook_resource == $event->webhooks['resource'] && $bot_webhook_event == 'all'
+					|| $bot_webhook_resource == 'all' && $bot_webhook_event == $event->webhooks['event']
+					|| $bot_webhook_resource == $event->webhooks['resource'] && $bot_webhook_event == $event->webhooks['event']
+					) {
+					if ($this->multithreaded) $this->collect_worker_garbage();
+					foreach ($bot_webhook_resource_event_params['callbacks'] as $callback) {
+						if ($this->multithreaded) {
+							$temp_cache = $this->cache; unset($this->cache);
+							$this->worker_pool->submit(
+								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+								);
+							$this->cache = $temp_cache; unset($temp_cache);
+						} else {
+							$callback($spark, $logger, $this->storage, $extensions, $event);
+						}
+					}
+				}
+			}
+		}
+
 		$is_admin = (!empty($event->permissions['admin'])) ? true : false;
 		if (!empty($this->admins) && !empty($event->rooms['id']) && empty($this->enabled_rooms[$event->rooms['id']])) {
 			$this->logger->addWarning(__FILE__.": ".__METHOD__.": there are admins and this room hasn't been enabled");
@@ -2195,6 +2221,7 @@ class Spark {
 				return;
 			}
 		}
+
 		// check for commands
 		if (!empty($event->messages['text'])) {
 			$any_commands_found = false;
@@ -2542,31 +2569,6 @@ class Spark {
 			}
 		}
 
-		if (!empty($this->bot_triggers['webhook'])) {
-			foreach ($this->bot_triggers['webhook'] as $bot_webhook_resource_event => $bot_webhook_resource_event_params) {
-				list($bot_webhook_resource, $bot_webhook_event) = explode('_', $bot_webhook_resource_event);
-				if (
-					$bot_webhook_resource == 'all' && $bot_webhook_event == 'all'
-					|| $bot_webhook_resource == $event->webhooks['resource'] && $bot_webhook_event == 'all'
-					|| $bot_webhook_resource == 'all' && $bot_webhook_event == $event->webhooks['event']
-					|| $bot_webhook_resource == $event->webhooks['resource'] && $bot_webhook_event == $event->webhooks['event']
-					) {
-					if ($this->multithreaded) $this->collect_worker_garbage();
-					foreach ($bot_webhook_resource_event_params['callbacks'] as $callback) {
-						if ($this->multithreaded) {
-							$temp_cache = $this->cache; unset($this->cache);
-							$this->worker_pool->submit(
-								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
-								);
-							$this->cache = $temp_cache; unset($temp_cache);
-						} else {
-							$callback($spark, $logger, $this->storage, $extensions, $event);
-						}
-					}
-				}
-			}
-		}
-
 		if (
 			!empty($this->bot_triggers['person'])
 			&& (
@@ -2888,12 +2890,12 @@ class Spark {
 			$this->logger->addWarning(__FILE__.": ".__METHOD__.": passive is true and trying to do something that could impact UX");
 
 			if (
-				$api == 'memberships'
+				($api == 'team_memberships' || $api == 'memberships')
 				&& $method == 'DELETE'
 				&& !empty($this->cache[$api][$params['membershipId']]['data']['personId'])
 				&& $this->cache[$api][$params['membershipId']]['data']['personId'] == $this->me['id']
 				) {
-				$this->logger->addWarning(__FILE__.": ".__METHOD__.": passive is true, but permitting bot to remove itself from a room");
+				$this->logger->addWarning(__FILE__.": ".__METHOD__.": passive is true, but permitting bot to remove itself from a room or team");
 			} else {
 				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 				return false;
@@ -2935,6 +2937,7 @@ class Spark {
 		if (
 			$this->enable_cache
 			&& $api != 'messages'
+			&& $api != 'team_memberships'
 			) {
 			if ($method == 'GET') {
 				$cacheable = true;
@@ -3464,7 +3467,7 @@ class Spark {
 		}
 
 		if (
-			!empty($event->rooms)
+			!empty($event->rooms['type'])
 			&& $event->rooms['type'] == 'direct'
 			&& empty($this->webhook_direct) 
 			) {
