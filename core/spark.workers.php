@@ -35,13 +35,15 @@ class Callback extends Collectable {
 
 		$function_start = \function_start();
 
-		$spark_helper_logger = new \SparkHelperLogger();
-		$this->logger = $spark_helper_logger->use_basic($logger->config);
+		$this->logger = new \BasicLogger($logger->config);
 		unset($logger);
 
 		$this->callback = $callback;
 		foreach ($spark->config['extensions'] as $extension => $extension_state) {
-			if (!empty($extension_state)) {
+			if (
+				!empty($extension_state)
+				&& isset($this->storage->$extension)
+				) {
 				$this->$extension = $this->storage->$extension;
 			}
 		}
@@ -85,7 +87,7 @@ class Callback extends Collectable {
 		if (!empty($return)) $storage = $return;
 
 		foreach ($spark->config['extensions'] as $extension => $extension_state) {
-			if (!empty($extension_state)) {
+			if (isset($this->$extension)) {
 				$extension_diff = \array_diff_assoc_recursive($extensions->$extension->storage->$extension, $this->$extension);
 				$storage->$extension = array_replace_recursive($storage->$extension, $extension_diff);
 				unset($this->$extension);

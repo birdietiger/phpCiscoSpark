@@ -546,7 +546,7 @@ class Spark {
 				$temp_diff = array_diff_assoc_recursive($job->storage->temp, $job->storage_temp_orig);
 				$this->storage->temp = array_replace_recursive($this->storage->temp, $temp_diff);
 				foreach ($this->config['extensions'] as $extension => $extension_state) {
-					if (!empty($extension_state)) {
+					if (isset($job->storage->$extension)) {
 						$this->storage->$extension = $job->storage->$extension;
 						unset($job->storage->$extension);
 					}

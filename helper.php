@@ -31,7 +31,7 @@ require_once __DIR__ . '/core/encryption.php';
 
 // load the config
 if (is_file($app_conf_file)) $config = $orig_config = parse_ini_file($app_conf_file, true);
-else die("EMERGENCY: Missing the configuration file: $app_conf_file\nINFO: See '".__DIR__."/README.md'\n");
+else $config = $orig_config = [];
 
 // setup logging with config
 $log_config = (!empty($config['log'])) ? $config['log'] : null;
