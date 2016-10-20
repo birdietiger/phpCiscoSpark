@@ -18,10 +18,15 @@ else
 // make sure phpCiscoSpark has been installed.
 if (!is_file(__DIR__.'/install.lock')) die("EMERGENCY: You need to install phpCiscoSpark. See '".__DIR__."/README.md'\n");
 
+// get util functions
+require_once __DIR__ . '/core/utils.php';
+
+// check for timezone
+if (empty(ini_get('date.timezone'))) set_timezone();
+
 //require necessary files to enable all features
 require_once __DIR__ . '/core/logging.php';
 require_once __DIR__ . '/core/storage.php';
-require_once __DIR__ . '/core/utils.php';
 require_once __DIR__ . '/core/nlp.php';
 require_once __DIR__ . '/core/curl.php';
 require_once __DIR__ . '/core/oauth.php';
