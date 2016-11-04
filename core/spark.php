@@ -3011,7 +3011,7 @@ class Spark {
 
 		$end_time = time();
 		if ($end_time - $start_time > $this->spark_api_slow_time) {
-			$this->logger->addError(__FILE__.": ".__METHOD__.": its taking too long to call $api_url");
+			$this->logger->addWarning(__FILE__.": ".__METHOD__.": its taking too long to call $api_url");
 			if ($this->spark_api_slow < $this->spark_api_slow_max) $this->spark_api_slow++;
 		} else if ($this->spark_api_slow > 0) $this->spark_api_slow - .5;
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": spark_api_slow: ".$this->spark_api_slow);
