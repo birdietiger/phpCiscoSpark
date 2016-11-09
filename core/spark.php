@@ -2269,12 +2269,20 @@ class Spark {
 							$found_bot_command = true;
 						}
 					}
+					$bot_command_message_data_markdown = null;
+					if (
+						$found_bot_command
+						&& !empty($event->messages['markdown'])
+						) {
+						$bot_command_message_data_markdown = preg_replace("/^\s*($this->me_mention_regex)?\s*\/$bot_command\s*/", '', $event->messages['markdown']);
+					}
 					if ($found_bot_command) {
 						$any_commands_found = true;
 						$event->command = array(
 							'name' => $bot_command,
 							'options' => $bot_command_options,
 							'data' => $bot_command_message_data,
+							'data_markdown' => $bot_command_message_data_markdown,
 							);
 						$this->logger->addInfo(__FILE__.": ".__METHOD__.": found command: ".json_encode($event->command));
 						if ($this->multithreaded) $this->collect_worker_garbage();

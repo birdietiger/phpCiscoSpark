@@ -95,7 +95,10 @@ class MessageBroker {
 		for ($i=1; $i<=3; $i++) {
 			if (!$broker_client->connect())
 				$this->logger->addError(__FILE__.": ".__METHOD__.": failed to connect to broker, attempt $i");
-			else break;
+			else {
+				$this->logger->addInfo(__FILE__.": ".__METHOD__.": connected to broker, attempt $i");
+				break;
+			}
 			if ($i == 3) return false;
 		}
 

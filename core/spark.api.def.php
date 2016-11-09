@@ -599,6 +599,9 @@ $spark_endpoints = array(
 						'beforeMessage' => array(
 							'type' => 'id',
 							),
+						'cursor' => array(
+							'type' => 'id',
+							),
 						'max' => array(
 							'type' => 'integer',
 							'min' => 1,
