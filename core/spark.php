@@ -2270,11 +2270,12 @@ class Spark {
 						}
 					}
 					$bot_command_message_data_markdown = null;
-					if (
-						$found_bot_command
-						&& !empty($event->messages['markdown'])
-						) {
-						$bot_command_message_data_markdown = preg_replace("/^\s*($this->me_mention_regex)?\s*\/$bot_command\s*/", '', $event->messages['markdown']);
+					$bot_command_message_data_html = null;
+					if ($found_bot_command) {
+						if (!empty($event->messages['markdown']))
+							$bot_command_message_data_markdown = preg_replace("/^\s*\/$bot_command\s*/", '', $event->messages['markdown']);
+						if (!empty($event->messages['html']))
+							$bot_command_message_data_html = preg_replace("/^\s*(<[^>]+>)\s*(<[^>]+>\s*)*\/$bot_command\s*(<\/[^>]+>\s*)*\s*/", "$1", $event->messages['html']);
 					}
 					if ($found_bot_command) {
 						$any_commands_found = true;
@@ -2282,7 +2283,9 @@ class Spark {
 							'name' => $bot_command,
 							'options' => $bot_command_options,
 							'data' => $bot_command_message_data,
+							'data_text' => $bot_command_message_data,
 							'data_markdown' => $bot_command_message_data_markdown,
+							'data_html' => $bot_command_message_data_html,
 							);
 						$this->logger->addInfo(__FILE__.": ".__METHOD__.": found command: ".json_encode($event->command));
 						if ($this->multithreaded) $this->collect_worker_garbage();
