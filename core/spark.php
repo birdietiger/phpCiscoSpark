@@ -2269,13 +2269,14 @@ class Spark {
 							$found_bot_command = true;
 						}
 					}
-					$bot_command_message_data_markdown = null;
 					$bot_command_message_data_html = null;
-					if ($found_bot_command) {
-						if (!empty($event->messages['markdown']))
-							$bot_command_message_data_markdown = preg_replace("/^\s*\/$bot_command\s*/", '', $event->messages['markdown']);
-						if (!empty($event->messages['html']))
-							$bot_command_message_data_html = preg_replace("/^\s*(<[^>]+>)\s*(<[^>]+>\s*)*\/$bot_command\s*(<\/[^>]+>\s*)*\s*/", "$1", $event->messages['html']);
+					if (
+						$found_bot_command
+						&& !empty($event->messages['html'])
+						) {
+						$html_mention = '<spark-mention data-object-type=\"person\" data-object-id=\"'.$this->me['id'].'\">.+<\/spark-mention>';
+						$remove_this = "/^\s*(<\/?[^>]+>\s*)*($html_mention\s*)?(<\/?[^>]+>\s*)*\/$bot_command\s*/";
+						$bot_command_message_data_html = preg_replace($remove_this, "$1$3", $event->messages['html']);
 					}
 					if ($found_bot_command) {
 						$any_commands_found = true;
@@ -2284,7 +2285,6 @@ class Spark {
 							'options' => $bot_command_options,
 							'data' => $bot_command_message_data,
 							'data_text' => $bot_command_message_data,
-							'data_markdown' => $bot_command_message_data_markdown,
 							'data_html' => $bot_command_message_data_html,
 							);
 						$this->logger->addInfo(__FILE__.": ".__METHOD__.": found command: ".json_encode($event->command));
