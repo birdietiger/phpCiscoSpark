@@ -2255,14 +2255,14 @@ class Spark {
 					$found_bot_command = false;
 					$complete_bot_command = $bot_command;
 					if (preg_match("/^\s*$this->me_mention_regex\s*\/($bot_command)(\s+(.*)\s*$|$)/is", $event->messages['text'], $matches) > 0) {
-						$bot_command_message_data = (!empty($matches[4])) ? rtrim($matches[4]) : '';
+						$bot_command_message_data = (!empty($matches[4])) ? trim($matches[4]) : '';
 						$bot_commands = explode('/', $matches[2]);
 						$bot_command = array_shift($bot_commands);
 						$bot_command_options = $bot_commands;
 						$found_bot_command = true;
 					} else if (empty($this->require_mention[$event->webhooks['data']['roomId']])) {
 						if (preg_match("/^\s*\/($bot_command)(\s+(.*)\s*$|$)/is", $event->messages['text'], $matches) > 0) {
-							$bot_command_message_data = (!empty($matches[3])) ? rtrim($matches[3]) : '';
+							$bot_command_message_data = (!empty($matches[3])) ? trim($matches[3]) : '';
 							$bot_commands = explode('/', $matches[1]);
 							$bot_command = array_shift($bot_commands);
 							$bot_command_options = $bot_commands;
@@ -2276,7 +2276,7 @@ class Spark {
 						) {
 						$html_mention = '<spark-mention data-object-type=\"person\" data-object-id=\"'.$this->me['id'].'\">.+<\/spark-mention>';
 						$remove_this = "/^\s*(<\/?[^>]+>\s*)*($html_mention\s*)?(<\/?[^>]+>\s*)*\/$bot_command\s*/";
-						$bot_command_message_data_html = preg_replace($remove_this, "$1$3", $event->messages['html']);
+						$bot_command_message_data_html = trim(preg_replace($remove_this, "$1$3", $event->messages['html']));
 					}
 					if ($found_bot_command) {
 						$any_commands_found = true;
