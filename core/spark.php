@@ -541,10 +541,15 @@ class Spark {
 			$function_start = \function_start();
 			if ($job->isGarbage()) {
 				$this->logger->addDebug(__FILE__.": Spark::collect_worker_garbage: collecting worker pool garbage");
+
+				remove_missing_array_assoc_recursive($job->storage->perm, $this->storage->perm);
 				$perm_diff = array_diff_assoc_recursive($job->storage->perm, $job->storage_perm_orig);
 				$this->storage->perm = array_replace_recursive($this->storage->perm, $perm_diff);
+
+				remove_missing_array_assoc_recursive($job->storage->temp, $this->storage->temp);
 				$temp_diff = array_diff_assoc_recursive($job->storage->temp, $job->storage_temp_orig);
 				$this->storage->temp = array_replace_recursive($this->storage->temp, $temp_diff);
+
 				foreach ($this->config['extensions'] as $extension => $extension_state) {
 					if (isset($job->storage->$extension)) {
 						$this->storage->$extension = $job->storage->$extension;
