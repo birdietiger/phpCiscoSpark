@@ -2262,14 +2262,14 @@ class Spark {
 					if (preg_match("/^\s*$this->me_mention_regex\s*\/($bot_command)(\s+(.*)\s*$|$)/is", $event->messages['text'], $matches) > 0) {
 						$bot_command_message_data = (!empty($matches[4])) ? trim($matches[4]) : '';
 						$bot_commands = explode('/', $matches[2]);
-						$bot_command = array_shift($bot_commands);
+						$bot_command_name = array_shift($bot_commands);
 						$bot_command_options = $bot_commands;
 						$found_bot_command = true;
 					} else if (empty($this->require_mention[$event->webhooks['data']['roomId']])) {
 						if (preg_match("/^\s*\/($bot_command)(\s+(.*)\s*$|$)/is", $event->messages['text'], $matches) > 0) {
 							$bot_command_message_data = (!empty($matches[3])) ? trim($matches[3]) : '';
 							$bot_commands = explode('/', $matches[1]);
-							$bot_command = array_shift($bot_commands);
+							$bot_command_name = array_shift($bot_commands);
 							$bot_command_options = $bot_commands;
 							$found_bot_command = true;
 						}
@@ -2286,7 +2286,7 @@ class Spark {
 					if ($found_bot_command) {
 						$any_commands_found = true;
 						$event->command = array(
-							'name' => $bot_command,
+							'name' => $bot_command_name,
 							'options' => $bot_command_options,
 							'data' => $bot_command_message_data,
 							'data_text' => $bot_command_message_data,
@@ -2301,7 +2301,7 @@ class Spark {
 							} else
 								$callbacks[] = $callback;
 							$this->report_spark_slow($event->rooms['id']);
-							if ($this->multithreaded && $bot_command != $this->bot_control_command) {
+							if ($this->multithreaded && $bot_command_name != $this->bot_control_command) {
 								$temp_cache = $this->cache; unset($this->cache);
 								$this->worker_pool->submit(
 									new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
