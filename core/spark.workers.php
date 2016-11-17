@@ -88,6 +88,7 @@ class Callback extends Collectable {
 
 		foreach ($spark->config['extensions'] as $extension => $extension_state) {
 			if (isset($this->$extension)) {
+				if (!isset($extensions->$extension->storage->$extension)) $extensions->$extension->storage->$extension = [];
 				$extension_diff = \array_diff_assoc_recursive($extensions->$extension->storage->$extension, $this->$extension);
 				if (!isset($storage->$extension)) $storage->$extension = [];
 				$storage->$extension = array_replace_recursive($storage->$extension, $extension_diff);
