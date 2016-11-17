@@ -40,11 +40,11 @@ class Callback extends Collectable {
 
 		$this->callback = $callback;
 		foreach ($spark->config['extensions'] as $extension => $extension_state) {
-			if (
-				!empty($extension_state)
-				&& isset($this->storage->$extension)
-				) {
-				$this->$extension = $this->storage->$extension;
+			if (!empty($extension_state)) {
+				if (isset($this->storage->$extension))
+					$this->$extension = $this->storage->$extension;
+				else
+					$this->$extension = [];
 			}
 		}
 		$this->spark = clone $spark;
@@ -89,6 +89,7 @@ class Callback extends Collectable {
 		foreach ($spark->config['extensions'] as $extension => $extension_state) {
 			if (isset($this->$extension)) {
 				$extension_diff = \array_diff_assoc_recursive($extensions->$extension->storage->$extension, $this->$extension);
+				if (!isset($storage->$extension)) $storage->$extension = [];
 				$storage->$extension = array_replace_recursive($storage->$extension, $extension_diff);
 				unset($this->$extension);
 			}
