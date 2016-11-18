@@ -410,7 +410,7 @@ class Spark {
 
 		if (!empty($this->bot_triggers['start']['<<--ENABLED-->>']['callbacks'])) {
 			foreach ($this->bot_triggers['start']['<<--ENABLED-->>']['callbacks'] as $callback)
-				$callback($this, $this->logger, $this->storage, $this->extensions, null);
+				$callback($this, $this->logger, $this->storage, $this->extensions, $event = null);
       }
 
 		if ($this->enable_cache) $this->save_cache();

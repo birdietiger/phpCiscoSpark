@@ -29,9 +29,9 @@ class Callback extends Collectable {
 	private $storage_temp_orig;
 	private $storage_perm_orig;
 	private $extensions;
-	private $details;
+	private $event;
 
-	public function __construct($callback, $spark, $logger, $storage, $extensions, $details) {
+	public function __construct($callback, $spark, $logger, $storage, $extensions, $event) {
 
 		$function_start = \function_start();
 
@@ -55,8 +55,8 @@ class Callback extends Collectable {
 
 		$this->extensions = $extensions;
 		unset($extensions);
-		$this->details = $details;
-		unset($details);
+		$this->event = $event;
+		unset($event);
 
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 
@@ -79,10 +79,10 @@ class Callback extends Collectable {
 
 
 		if (is_array($this->callback) && is_object($this->callback[0]))
-			$return = &$this->callback[0]->{$this->callback[1]}($spark, $this->logger, $storage, $extensions, $this->details);
+			$return = &$this->callback[0]->{$this->callback[1]}($spark, $this->logger, $storage, $extensions, $this->event);
 		else {
 			$callback = &$this->callback;
-			$return = $callback($spark, $this->logger, $storage, $extensions, $this->details);
+			$return = $callback($spark, $this->logger, $storage, $extensions, $this->event);
 		}
 		if (!empty($return)) $storage = $return;
 
@@ -100,7 +100,7 @@ class Callback extends Collectable {
 		unset($storage);
 
 		unset($spark);
-		unset($this->details);
+		unset($this->event);
 		unset($this->callback);
 
       $this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
