@@ -2202,11 +2202,11 @@ class Spark {
 						if ($this->multithreaded) {
 							$temp_cache = $this->cache; unset($this->cache);
 							$this->worker_pool->submit(
-								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+								new Callback($callback, $spark, $logger, $storage, $extensions, $event)
 								);
 							$this->cache = $temp_cache; unset($temp_cache);
 						} else {
-							$callback($spark, $logger, $this->storage, $extensions, $event);
+							$callback($spark, $logger, $storage, $extensions, $event);
 						}
 					}
 				}
@@ -2304,11 +2304,11 @@ class Spark {
 							if ($this->multithreaded && $bot_command_name != $this->bot_control_command) {
 								$temp_cache = $this->cache; unset($this->cache);
 								$this->worker_pool->submit(
-									new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+									new Callback($callback, $spark, $logger, $storage, $extensions, $event)
 									);
 								$this->cache = $temp_cache; unset($temp_cache);
 							} else {
-								$callback($spark, $logger, $this->storage, $extensions, $event);
+								$callback($spark, $logger, $storage, $extensions, $event);
 							}
 						}
 						unset($event->command);
@@ -2339,11 +2339,11 @@ class Spark {
 					if ($this->multithreaded) {
 						$temp_cache = $this->cache; unset($this->cache);
 						$this->worker_pool->submit(
-							new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+							new Callback($callback, $spark, $logger, $storage, $extensions, $event)
 							);
 						$this->cache = $temp_cache; unset($temp_cache);
 					} else {
-						$callback($spark, $logger, $this->storage, $extensions, $event);
+						$callback($spark, $logger, $storage, $extensions, $event);
 					}
 				}
 				unset($event->command);
@@ -2380,11 +2380,11 @@ class Spark {
 						if ($this->multithreaded) {
 							$temp_cache = $this->cache; unset($this->cache);
 							$this->worker_pool->submit(
-								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+								new Callback($callback, $spark, $logger, $storage, $extensions, $event)
 								);
 							$this->cache = $temp_cache; unset($temp_cache);
 						} else {
-							$callback($spark, $logger, $this->storage, $extensions, $event);
+							$callback($spark, $logger, $storage, $extensions, $event);
 						}
 					}
 					unset($event->command);
@@ -2408,11 +2408,11 @@ class Spark {
 						if ($this->multithreaded) {
 							$temp_cache = $this->cache; unset($this->cache);
 							$this->worker_pool->submit(
-								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+								new Callback($callback, $spark, $logger, $storage, $extensions, $event)
 								);
 							$this->cache = $temp_cache; unset($temp_cache);
 						} else {
-							$callback($spark, $logger, $this->storage, $extensions, $event);
+							$callback($spark, $logger, $storage, $extensions, $event);
 						}
 					}
 				}
@@ -2435,11 +2435,11 @@ class Spark {
 						if ($this->multithreaded) {
 							$temp_cache = $this->cache; unset($this->cache);
 							$this->worker_pool->submit(
-								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+								new Callback($callback, $spark, $logger, $storage, $extensions, $event)
 								);
 							$this->cache = $temp_cache; unset($temp_cache);
 						} else {
-							$callback($spark, $logger, $this->storage, $extensions, $event);
+							$callback($spark, $logger, $storage, $extensions, $event);
 						}
 					}
 				}
@@ -2461,11 +2461,11 @@ class Spark {
 						if ($this->multithreaded) {
 							$temp_cache = $this->cache; unset($this->cache);
 							$this->worker_pool->submit(
-								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+								new Callback($callback, $spark, $logger, $storage, $extensions, $event)
 								);
 							$this->cache = $temp_cache; unset($temp_cache);
 						} else {
-							$callback($spark, $logger, $this->storage, $extensions, $event);
+							$callback($spark, $logger, $storage, $extensions, $event);
 						}
 					}
 				}
@@ -2488,11 +2488,11 @@ class Spark {
 						if ($this->multithreaded) {
 							$temp_cache = $this->cache; unset($this->cache);
 							$this->worker_pool->submit(
-								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+								new Callback($callback, $spark, $logger, $storage, $extensions, $event)
 								);
 							$this->cache = $temp_cache; unset($temp_cache);
 						} else {
-							$callback($spark, $logger, $this->storage, $extensions, $event);
+							$callback($spark, $logger, $storage, $extensions, $event);
 						}
 					}
 				}
@@ -2515,11 +2515,11 @@ class Spark {
 						if ($this->multithreaded) {
 							$temp_cache = $this->cache; unset($this->cache);
 							$this->worker_pool->submit(
-								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+								new Callback($callback, $spark, $logger, $storage, $extensions, $event)
 								);
 							$this->cache = $temp_cache; unset($temp_cache);
 						} else {
-							$callback($spark, $logger, $this->storage, $extensions, $event);
+							$callback($spark, $logger, $storage, $extensions, $event);
 						}
 					}
 				}
@@ -2547,11 +2547,11 @@ class Spark {
 					if ($this->multithreaded) {
 						$temp_cache = $this->cache; unset($this->cache);
 						$this->worker_pool->submit(
-							new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+							new Callback($callback, $spark, $logger, $storage, $extensions, $event)
 							);
 						$this->cache = $temp_cache; unset($temp_cache);
 					} else {
-						$callback($spark, $logger, $this->storage, $extensions, $event);
+						$callback($spark, $logger, $storage, $extensions, $event);
 					}
 				}
 				unset($event->matches);
@@ -2575,11 +2575,11 @@ class Spark {
 					if ($this->multithreaded) {
 						$temp_cache = $this->cache; unset($this->cache);
 						$this->worker_pool->submit(
-							new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+							new Callback($callback, $spark, $logger, $storage, $extensions, $event)
 							);
 						$this->cache = $temp_cache; unset($temp_cache);
 					} else {
-						$callback($spark, $logger, $this->storage, $extensions, $event);
+						$callback($spark, $logger, $storage, $extensions, $event);
 					}
 				}
 			}
@@ -2602,11 +2602,11 @@ class Spark {
 						if ($this->multithreaded) {
 							$temp_cache = $this->cache; unset($this->cache);
 							$this->worker_pool->submit(
-								new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+								new Callback($callback, $spark, $logger, $storage, $extensions, $event)
 								);
 							$this->cache = $temp_cache; unset($temp_cache);
 						} else {
-							$callback($spark, $logger, $this->storage, $extensions, $event);
+							$callback($spark, $logger, $storage, $extensions, $event);
 						}
 					}
 				}
@@ -2638,11 +2638,11 @@ class Spark {
 					if ($this->multithreaded) {
 						$temp_cache = $this->cache; unset($this->cache);
 						$this->worker_pool->submit(
-							new Callback($callback, $spark, $logger, $this->storage, $extensions, $event)
+							new Callback($callback, $spark, $logger, $storage, $extensions, $event)
 							);
 						$this->cache = $temp_cache; unset($temp_cache);
 					} else {
-						$callback($spark, $logger, $this->storage, $extensions, $event);
+						$callback($spark, $logger, $storage, $extensions, $event);
 					}
 				}
 			}
