@@ -2185,7 +2185,7 @@ class Spark {
 		return $storage;
 	}
 
-	public function bot_process_webhook($spark, $logger, $storage, $extensions, $event) {
+	public function bot_process_webhook(&$spark, &$logger, &$storage, &$extensions, $event) {
 		$function_start = \function_start();
 
 		if (!empty($this->bot_triggers['webhook'])) {
