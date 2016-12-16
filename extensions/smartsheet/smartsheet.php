@@ -3,6 +3,7 @@
 class Smartsheet {
 
 	protected $logger;
+	public $api_retries = 3;
 	public $access_token;
 	public $workspace_id;
 	public $template_id;
@@ -13,12 +14,11 @@ class Smartsheet {
 	public $config_file;
 	protected $cache_expires = 3600; // secs
 
-	public function __construct($logger, $config_file = null, $storage = null) {
+	public function __construct($logger, $config_file = null) {
 		$function_start = \function_start();
 		$this->config_file = $config_file;
 		$this->logger = $logger;
-		if ($storage !== null) $this->storage = $storage;
-		else $this->storage = new StdClass();
+		$this->storage = new StdClass();
 		if (!class_exists('Curl')) {
 			$this->logger->addCritical(__FILE__.": ".__METHOD__.": Curl class is missing. make sure to include Curl handler");
 			exit();
@@ -92,7 +92,10 @@ class Smartsheet {
 
 			if (!empty($workspaces = $this->search_for_workspaces($smart_name['regex'])))
 				$workspace_id = $workspaces[0]['id'];
-			else
+			else if ($workspaces === null) {
+				$this->logger->addError(__FILE__.": ".__METHOD__.": didn't get anything valid back from smartsheet");
+				return false;
+			} else
 				$workspace_id = $this->create_workspace($smart_name['name']);
 
 			if (!empty($workspace_id)) {
@@ -132,7 +135,10 @@ class Smartsheet {
 
 			if (!empty($folders = $this->search_for_folders_in_workspace($smart_name['regex'], $workspace_id)))
 				$folder_id = $folders[0]['id'];
-			else
+			else if ($folder_id === null) {
+				$this->logger->addError(__FILE__.": ".__METHOD__.": didn't get anything valid back from smartsheet");
+				return false;
+			} else
 				$folder_id = $this->create_folder_in_workspace($smart_name['name']);
 
 			if (!empty($folder_id)) {
@@ -172,7 +178,10 @@ class Smartsheet {
 
 			if (!empty($sheets = $this->search_for_sheets_workspace($smart_name['regex'], $workspace_id)))
 				$sheet = $sheets[0];
-			else
+			else if ($sheets === null) {
+				$this->logger->addError(__FILE__.": ".__METHOD__.": didn't get anything valid back from smartsheet");
+				return false;
+			} else
 				$sheet = $this->create_sheet_workspace($smart_name['name'], $workspace_id);
 
 			if (!empty($sheet)) {
@@ -211,7 +220,10 @@ class Smartsheet {
 
 			if (!empty($sheets = $this->search_for_sheets($smart_name['regex'], $folder_id)))
 				$sheet = array('id' => $sheets[0]['id'], 'url' => $sheets[0]['permalink']);
-			else
+			else if ($sheets === null) {
+				$this->logger->addError(__FILE__.": ".__METHOD__.": didn't get anything valid back from smartsheet");
+				return false;
+			} else
 				$sheet = $this->create_sheet($smart_name['name'], $folder_id);
 
 			if (!empty($sheet)) {
@@ -257,7 +269,7 @@ class Smartsheet {
       $curl->success_http_code = '200';
 		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
-      if (empty($result = $curl->request())) {
+      if (empty($result = $curl->request()) || !isset($result['resultCode'])) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from create");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return false;
@@ -309,7 +321,7 @@ class Smartsheet {
       $curl->success_http_code = '200';
 		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
-      if (empty($result = $curl->request())) {
+      if (empty($result = $curl->request()) || !isset($result['resultCode'])) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from create");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return false;
@@ -361,7 +373,7 @@ class Smartsheet {
       $curl->success_http_code = '200';
 		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
-      if (empty($result = $curl->request())) {
+      if (empty($result = $curl->request()) || !isset($result['resultCode'])) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from create");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return false;
@@ -420,7 +432,7 @@ class Smartsheet {
       $curl->success_http_code = '200';
 		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
-      if (empty($result = $curl->request())) {
+      if (empty($result = $curl->request()) || !isset($result['resultCode'])) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from create");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return false;
@@ -480,7 +492,7 @@ class Smartsheet {
       $curl->success_http_code = '200';
 		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
-      if (empty($result = $curl->request())) {
+      if (empty($result = $curl->request()) || !isset($result['resultCode'])) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from create");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return false;
@@ -540,7 +552,7 @@ class Smartsheet {
       $curl->success_http_code = '200';
 		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
-      if (empty($result = $curl->request())) {
+      if (empty($result = $curl->request()) || !isset($result['resultCode'])) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from create");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return false;
@@ -573,28 +585,32 @@ class Smartsheet {
 		$url = "https://api.smartsheet.com/2.0/sheets/".$sheet_id."/publish";
 
 		$curl = new Curl($this->logger);//$this->curl;
-      $curl->method = 'GET';
+		$curl->method = 'GET';
 		$curl->headers = array(
 			"Authorization: Bearer ".$this->access_token,
 			"Content-Type: application/json",
 			);
-      $curl->response_type = 'json';
-      $curl->url = $url;
-      $curl->success_http_code = '200';
+		$curl->response_type = 'json';
+		$curl->url = $url;
+		$curl->success_http_code = '200';
 		$curl->backoff_codes = array('429', '500', '503');
-      $curl->caller = __FILE__.': '.__METHOD__;
-      if (empty($result = $curl->request())) {
-			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get publish");
+		$curl->caller = __FILE__.': '.__METHOD__;
+		for ($i=0; $i<$this->api_retries; $i++) {
+			if (empty($result = $curl->request())) {
+				$this->logger->addError(__FILE__.': '.__METHOD__.": got nothing, trying again");
+				continue;
+			}
+
+			$publish_result = array();
+			$publish_result['read_url'] = (!empty($result['readOnlyFullUrl'])) ? $result['readOnlyFullUrl'] : '';
+			$publish_result['write_url'] = (!empty($result['readWriteUrl'])) ? $result['readWriteUrl'] : '';
+
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
+			return $publish_result;
 		}
-
-		$publish_result = array();
-		$publish_result['read_url'] = (!empty($result['readOnlyFullUrl'])) ? $result['readOnlyFullUrl'] : '';
-		$publish_result['write_url'] = (!empty($result['readWriteUrl'])) ? $result['readWriteUrl'] : '';
-
+		$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get publish");
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-		return $publish_result;
+		return null;
 
 	}
 
@@ -638,7 +654,7 @@ class Smartsheet {
       $curl->success_http_code = '200';
 		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
-      if (empty($result = $curl->request())) {
+      if (empty($result = $curl->request()) || !isset($result['resultCode'])) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from shares");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return false;
@@ -692,7 +708,7 @@ class Smartsheet {
       $curl->success_http_code = '200';
 		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
-      if (empty($result = $curl->request())) {
+      if (empty($result = $curl->request()) || !isset($result['resultCode'])) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from publish");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return false;
@@ -743,7 +759,7 @@ class Smartsheet {
 		if (empty($columns = $this->get_columns($sheet_id))) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": failed to get all columns");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
+			return $columns;
 		}
 
 		$params = array();
@@ -777,7 +793,7 @@ class Smartsheet {
       $curl->success_http_code = '200';
 		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
-      if (empty($result = $curl->request())) {
+      if (empty($result = $curl->request()) || !isset($result['resultCode'])) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from update rows");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return false;
@@ -809,7 +825,7 @@ class Smartsheet {
 			} else $workspace_id = $this->workspace_id;
 		}
 
-		$url = "https://api.smartsheet.com/2.0/workspaces/".$workspace_id."/folders";
+		$url = "https://api.smartsheet.com/2.0/workspaces/".$workspace_id."/folders?includeAll=true";
 
 		$curl = new Curl($this->logger);//$this->curl;
       $curl->method = 'GET';
@@ -822,22 +838,26 @@ class Smartsheet {
       $curl->success_http_code = '200';
 		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
-      if (empty($result = $curl->request())) {
-			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get folders");
+      for ($i=0; $i<$this->api_retries; $i++) {
+         if (empty($result = $curl->request()) || !isset($result['data'])) {
+            $this->logger->addError(__FILE__.': '.__METHOD__.": got nothing, trying again");
+            continue;
+			}
+			if (empty($result['data'])) {
+				$this->logger->addInfo(__FILE__.': '.__METHOD__.": no folders");
+				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+				return false;
+			}
+			$folders = array();
+			foreach ($result['data'] as $folder) {
+				$folders[$folder['id']] = $folder;
+			}
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
+			return $folders;
 		}
-		if (empty($result['data'])) {
-			$this->logger->addInfo(__FILE__.': '.__METHOD__.": no folders");
-			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
-		}
-		$folders = array();
-		foreach ($result['data'] as $folder) {
-			$folders[$folder['id']] = $folder;
-		}
+		$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get folders");
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-		return $folders;
+		return null;
 
 	}
 
@@ -855,7 +875,7 @@ class Smartsheet {
 			if (empty($workspaces = $this->get_workspaces())) {
 				$this->logger->addInfo(__FILE__.': '.__METHOD__.": no workspaces to search");
 				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-				return false;
+				return $workspaces;
 			}
 
 			$found_workspaces = array();
@@ -865,11 +885,13 @@ class Smartsheet {
 				}
 			}
 			if (empty($found_workspaces)) $this->logger->addInfo(__FILE__.': '.__METHOD__.": no workspaces found that match query: $query");
-			else $this->logger->addInfo(__FILE__.': '.__METHOD__.": found ".count($found_workspaces)." workspaces");
-			$this->storage->smartsheet['search_for_workspaces_cache'][$query] = array(
-				'expires' => time() + $this->cache_expires,
-				'data' => $found_workspaces,
-				);
+			else {
+				$this->logger->addInfo(__FILE__.': '.__METHOD__.": found ".count($found_workspaces)." workspaces");
+				$this->storage->smartsheet['search_for_workspaces_cache'][$query] = array(
+					'expires' => time() + $this->cache_expires,
+					'data' => $found_workspaces,
+					);
+			}
 
 		}
 
@@ -901,7 +923,7 @@ class Smartsheet {
 			if (empty($folders = $this->get_folders_in_workspace($workspace_id))) {
 				$this->logger->addInfo(__FILE__.': '.__METHOD__.": no folders to search");
 				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-				return false;
+				return $folders;
 			}
 
 			$found_folders = array();
@@ -947,7 +969,7 @@ class Smartsheet {
 			if (empty($sheets = $this->get_sheets_workspace($workspace_id))) {
 				$this->logger->addInfo(__FILE__.': '.__METHOD__.": no sheets to search");
 				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-				return false;
+				return $sheets;
 			}
 			$found_sheets = array();
 			foreach ($sheets as $sheet_id => $sheet_details) {
@@ -993,7 +1015,7 @@ class Smartsheet {
 			if (empty($sheets = $this->get_sheets($folder_id))) {
 				$this->logger->addInfo(__FILE__.': '.__METHOD__.": no sheets to search");
 				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-				return false;
+				return $sheets;
 			}
 			$found_sheets = array();
 			foreach ($sheets as $sheet_id => $sheet_details) {
@@ -1024,7 +1046,7 @@ class Smartsheet {
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return false;
 		}
-		$url = "https://api.smartsheet.com/2.0/home";
+		$url = "https://api.smartsheet.com/2.0/home?includeAll=true";
 
 		$curl = new Curl($this->logger);//$this->curl;
       $curl->method = 'GET';
@@ -1036,14 +1058,19 @@ class Smartsheet {
       $curl->success_http_code = '200';
 		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
-      if (empty($result = $curl->request())) {
-			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get home content");
+      for ($i=0; $i<$this->api_retries; $i++) {
+         if (empty($result = $curl->request())) {
+            $this->logger->addError(__FILE__.': '.__METHOD__.": got nothing, trying again");
+            continue;
+         }
+
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
+			return $result;
 		}
 
+		$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get home content");
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-		return $result;
+		return null;
 
 	}
 
@@ -1063,7 +1090,7 @@ class Smartsheet {
 			} else $workspace_id = $this->workspace_id;
 		}
 
-		$url = "https://api.smartsheet.com/2.0/workspaces/".$workspace_id;
+		$url = "https://api.smartsheet.com/2.0/workspaces/".$workspace_id."?includeAll=true";
 
 		$curl = new Curl($this->logger);//$this->curl;
       $curl->method = 'GET';
@@ -1076,22 +1103,26 @@ class Smartsheet {
       $curl->success_http_code = '200';
 		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
-      if (empty($result = $curl->request())) {
-			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get sheets");
+      for ($i=0; $i<$this->api_retries; $i++) {
+         if (empty($result = $curl->request())) {
+            $this->logger->addError(__FILE__.': '.__METHOD__.": got nothing, trying again");
+            continue;
+         }
+			if (empty($result['sheets'])) {
+				$this->logger->addInfo(__FILE__.': '.__METHOD__.": no sheets");
+				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+				return false;
+			}
+			$sheets = array();
+			foreach ($result['sheets'] as $sheet) {
+				$sheets[$sheet['id']] = $sheet;
+			}
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
+			return $sheets;
 		}
-		if (empty($result['sheets'])) {
-			$this->logger->addInfo(__FILE__.': '.__METHOD__.": no sheets");
-			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
-		}
-		$sheets = array();
-		foreach ($result['sheets'] as $sheet) {
-			$sheets[$sheet['id']] = $sheet;
-		}
+		$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get sheets");
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-		return $sheets;
+		return null;
 
 	}
 
@@ -1111,7 +1142,7 @@ class Smartsheet {
 			} else $folder_id = $this->folder_id;
 		}
 
-		$url = "https://api.smartsheet.com/2.0/folders/".$folder_id;
+		$url = "https://api.smartsheet.com/2.0/folders/".$folder_id."?includeAll=true";
 
 		$curl = new Curl($this->logger);//$this->curl;
       $curl->method = 'GET';
@@ -1124,22 +1155,26 @@ class Smartsheet {
       $curl->success_http_code = '200';
 		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
-      if (empty($result = $curl->request())) {
-			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get sheets");
+      for ($i=0; $i<$this->api_retries; $i++) {
+         if (empty($result = $curl->request())) {
+            $this->logger->addError(__FILE__.': '.__METHOD__.": got nothing, trying again");
+            continue;
+         }
+			if (empty($result['sheets'])) {
+				$this->logger->addInfo(__FILE__.': '.__METHOD__.": no sheets");
+				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+				return false;
+			}
+			$sheets = array();
+			foreach ($result['sheets'] as $sheet) {
+				$sheets[$sheet['id']] = $sheet;
+			}
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
+			return $sheets;
 		}
-		if (empty($result['sheets'])) {
-			$this->logger->addInfo(__FILE__.': '.__METHOD__.": no sheets");
-			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
-		}
-		$sheets = array();
-		foreach ($result['sheets'] as $sheet) {
-			$sheets[$sheet['id']] = $sheet;
-		}
+		$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get sheets");
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-		return $sheets;
+		return null;
 
 	}
 
@@ -1157,7 +1192,7 @@ class Smartsheet {
 			} else $workspace_id = $this->workspace_id;
 		}
 
-		$url = "https://api.smartsheet.com/2.0/workspaces/$workspace_id/folders";
+		$url = "https://api.smartsheet.com/2.0/workspaces/$workspace_id/folders?includeAll=true";
 
 		$curl = new Curl($this->logger);//$this->curl;
       $curl->method = 'GET';
@@ -1170,22 +1205,26 @@ class Smartsheet {
       $curl->success_http_code = '200';
 		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
-      if (empty($result = $curl->request())) {
-			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get folders");
+      for ($i=0; $i<$this->api_retries; $i++) {
+         if (empty($result = $curl->request()) || !isset($result['data'])) {
+            $this->logger->addError(__FILE__.': '.__METHOD__.": got nothing, trying again");
+            continue;
+         }
+			if (empty($result['data'])) {
+				$this->logger->addInfo(__FILE__.': '.__METHOD__.": no folders");
+				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+				return false;
+			}
+			$folders = array();
+			foreach ($result['data'] as $folder) {
+				$folders[$folder['id']] = $folder;
+			}
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
+			return $folders;
 		}
-		if (empty($result['data'])) {
-			$this->logger->addInfo(__FILE__.': '.__METHOD__.": no folders");
-			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
-		}
-		$folders = array();
-		foreach ($result['data'] as $folder) {
-			$folders[$folder['id']] = $folder;
-		}
+		$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get folders");
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-		return $folders;
+		return null;
 
 	}
 
@@ -1198,8 +1237,7 @@ class Smartsheet {
 			return false;
 		}
 
-		$url = "https://api.smartsheet.com/2.0/workspaces";
-
+		$url = "https://api.smartsheet.com/2.0/workspaces?includeAll=true";
 
 		$curl = new Curl($this->logger);//$this->curl;
       $curl->method = 'GET';
@@ -1212,22 +1250,26 @@ class Smartsheet {
       $curl->success_http_code = '200';
 		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
-      if (empty($result = $curl->request())) {
-			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get workspaces");
+      for ($i=0; $i<$this->api_retries; $i++) {
+         if (empty($result = $curl->request()) || !isset($result['data'])) {
+            $this->logger->addError(__FILE__.': '.__METHOD__.": got nothing, trying again");
+            continue;
+         }
+			if (empty($result['data'])) {
+				$this->logger->addInfo(__FILE__.': '.__METHOD__.": no workspaces");
+				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+				return false;
+			}
+			$workspaces = array();
+			foreach ($result['data'] as $workspace) {
+				$workspaces[$workspace['id']] = $workspace;
+			}
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
+			return $workspaces;
 		}
-		if (empty($result['data'])) {
-			$this->logger->addInfo(__FILE__.': '.__METHOD__.": no workspaces");
-			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
-		}
-		$workspaces = array();
-		foreach ($result['data'] as $workspace) {
-			$workspaces[$workspace['id']] = $workspace;
-		}
+		$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get workspaces");
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-		return $workspaces;
+		return null;
 
 	}
 
@@ -1249,7 +1291,7 @@ class Smartsheet {
 		if (!empty($folder_id)) $url .= "folders/".$folder_id;
 		else $url .= "home";
 		$url .= "/folders";
-
+		$url .= "?includeAll=true";
 
 		$curl = new Curl($this->logger);//$this->curl;
       $curl->method = 'GET';
@@ -1262,22 +1304,26 @@ class Smartsheet {
       $curl->success_http_code = '200';
 		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
-      if (empty($result = $curl->request())) {
-			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get folders");
+      for ($i=0; $i<$this->api_retries; $i++) {
+         if (empty($result = $curl->request()) || !isset($result['data'])) {
+            $this->logger->addError(__FILE__.': '.__METHOD__.": got nothing, trying again");
+            continue;
+         }
+			if (empty($result['data'])) {
+				$this->logger->addInfo(__FILE__.': '.__METHOD__.": no folders");
+				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+				return false;
+			}
+			$folders = array();
+			foreach ($result['data'] as $folder) {
+				$folders[$folder['id']] = $folder;
+			}
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
+			return $folders;
 		}
-		if (empty($result['data'])) {
-			$this->logger->addInfo(__FILE__.': '.__METHOD__.": no folders");
-			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
-		}
-		$folders = array();
-		foreach ($result['data'] as $folder) {
-			$folders[$folder['id']] = $folder;
-		}
+		$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get folders");
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-		return $folders;
+		return null;
 
 	}
 
@@ -1298,10 +1344,10 @@ class Smartsheet {
 		if (empty($columns = $this->get_columns($sheet_id))) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": failed to get all columns");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
+			return $columns;
 		}
 
-		$url = "https://api.smartsheet.com/2.0/sheets/".$sheet_id;
+		$url = "https://api.smartsheet.com/2.0/sheets/".$sheet_id."?includeAll=true";
 
 		$curl = new Curl($this->logger);//$this->curl;
       $curl->method = 'GET';
@@ -1313,38 +1359,42 @@ class Smartsheet {
       $curl->success_http_code = '200';
 		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
-      if (empty($result = $curl->request())) {
-			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get_rows");
-			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
-		}
-		if (empty($result['rows'])) {
-			$this->logger->addInfo(__FILE__.': '.__METHOD__.": no rows to get");
-			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
-		}
-		$rows = array();
-		foreach ($result['rows'] as $row) {
-			$new_row = $row;
-			unset($new_row['cells']);
-			foreach ($row['cells'] as $cell) {
-				if (isset($filter[$columns[$cell['columnId']]])) {
-					if (is_bool($filter[$columns[$cell['columnId']]])) {
-						if (!isset($cell['value'])) $cell['value'] = false;
-						if ($filter[$columns[$cell['columnId']]] != $cell['value']) continue 2; 
-					} else {
-						if (
-							!isset($cell['displayValue']) || 
-							preg_match("/^".$filter[$columns[$cell['columnId']]]."$/", $cell['displayValue']) == 0
-							) { continue 2; }
-					}
-				}
-				$new_row['cells'][$columns[$cell['columnId']]] = $cell;
+      for ($i=0; $i<$this->api_retries; $i++) {
+         if (empty($result = $curl->request())) {
+            $this->logger->addError(__FILE__.': '.__METHOD__.": got nothing, trying again");
+            continue;
+         }
+			if (empty($result['rows'])) {
+				$this->logger->addInfo(__FILE__.': '.__METHOD__.": no rows to get");
+				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+				return false;
 			}
-			$rows[] = $new_row;
+			$rows = array();
+			foreach ($result['rows'] as $row) {
+				$new_row = $row;
+				unset($new_row['cells']);
+				foreach ($row['cells'] as $cell) {
+					if (isset($filter[$columns[$cell['columnId']]])) {
+						if (is_bool($filter[$columns[$cell['columnId']]])) {
+							if (!isset($cell['value'])) $cell['value'] = false;
+							if ($filter[$columns[$cell['columnId']]] != $cell['value']) continue 2; 
+						} else {
+							if (
+								!isset($cell['displayValue']) || 
+								preg_match("/^".$filter[$columns[$cell['columnId']]]."$/", $cell['displayValue']) == 0
+								) { continue 2; }
+						}
+					}
+					$new_row['cells'][$columns[$cell['columnId']]] = $cell;
+				}
+				$rows[] = $new_row;
+			}
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return $rows;
 		}
+		$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get_rows");
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-		return $rows;
+		return null;
 
 	}
 
@@ -1373,7 +1423,7 @@ class Smartsheet {
 			return false;
 		}
 
-		$url = "https://api.smartsheet.com/2.0/sheets/".$sheet_id."/columns";
+		$url = "https://api.smartsheet.com/2.0/sheets/".$sheet_id."/columns?includeAll=true";
 
 		$curl = new Curl($this->logger);//$this->curl;
       $curl->method = 'GET';
@@ -1385,29 +1435,33 @@ class Smartsheet {
       $curl->success_http_code = '200';
 		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
-      if (empty($result = $curl->request())) {
-			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get_columns");
-			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
-		}
-		if (empty($result['data'])) {
-			$this->logger->addInfo(__FILE__.': '.__METHOD__.": no columns to get: ".$result['message']);
-			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
-		}
-		$columns = array();
-		foreach ($result['data'] as $column)
-			$columns[$column['id']] = $column['title'];
+      for ($i=0; $i<$this->api_retries; $i++) {
+         if (empty($result = $curl->request()) || !isset($result['data'])) {
+            $this->logger->addError(__FILE__.': '.__METHOD__.": got nothing, trying again");
+            continue;
+         }
+			if (empty($result['data'])) {
+				$this->logger->addInfo(__FILE__.': '.__METHOD__.": no columns to get: ".$result['message']);
+				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+				return false;
+			}
+			$columns = array();
+			foreach ($result['data'] as $column)
+				$columns[$column['id']] = $column['title'];
 
-		if (!empty($columns)) {
-			$this->storage->smartsheet['columns_cache'][$sheet_id] = array(
-				'data' => $columns,
-				'expires' => time() + $this->cache_expires,
-				);
+			if (!empty($columns)) {
+				$this->storage->smartsheet['columns_cache'][$sheet_id] = array(
+					'data' => $columns,
+					'expires' => time() + $this->cache_expires,
+					);
+			}
+	
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return $columns;
 		}
-
+		$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from get_columns");
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-		return $columns;
+		return null;
 
 	}
 
@@ -1443,7 +1497,7 @@ class Smartsheet {
       $curl->success_http_code = '200';
 		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
-      if (empty($result = $curl->request())) {
+      if (empty($result = $curl->request()) || !isset($result['resultCode'])) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from delete row");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return false;
@@ -1479,7 +1533,7 @@ class Smartsheet {
 		if (empty($columns = $this->get_columns($sheet_id))) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": failed to get all columns");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-			return false;
+			return $columns;
 		}
 		if (count($cell_data) != count($columns))
 			$this->logger->addWarning(__FILE__.': '.__METHOD__.": not the correct number of columns");
@@ -1513,7 +1567,7 @@ class Smartsheet {
       $curl->success_http_code = '200';
 		$curl->backoff_codes = array('429', '500', '503');
       $curl->caller = __FILE__.': '.__METHOD__;
-      if (empty($result = $curl->request())) {
+      if (empty($result = $curl->request()) || !isset($result['resultCode'])) {
 			$this->logger->addError(__FILE__.': '.__METHOD__.": didn't get anything back from add row");
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return false;
