@@ -20,39 +20,35 @@ class CallbackWorker extends Worker {
 
 }
 
-class Callback extends Collectable {
+class Callback extends Threaded {
 
 	private $callback;
+	private $garbage = false;
+	private $uniqid;
 	private $spark;
 	private $logger;
 	private $storage;
 	private $storage_temp_orig;
 	private $storage_perm_orig;
 	private $extensions;
+	private $extensions_orig;
 	private $event;
 
 	public function __construct($callback, $spark, $logger, $storage, $extensions, $event) {
 
 		$function_start = \function_start();
 
-		$this->logger = new \BasicLogger($logger->config);
+		$this->uniqid = uniqid();
+		$this->logger = new \BasicLogger($logger->config, $this->uniqid);
 		unset($logger);
-
 		$this->callback = $callback;
-		foreach ($spark->config['extensions'] as $extension => $extension_state) {
-			if (!empty($extension_state)) {
-				if (isset($this->storage->$extension))
-					$this->$extension = $this->storage->$extension;
-				else
-					$this->$extension = [];
-			}
-		}
-		$this->spark = clone $spark;
+		unset($callback);
+		$this->spark = $spark;
 		unset($spark);
 		$this->storage = $storage;
+		unset($storage);
 		$this->storage_perm_orig = $this->storage->perm;
 		$this->storage_temp_orig = $this->storage->temp;
-
 		$this->extensions = $extensions;
 		unset($extensions);
 		$this->event = $event;
@@ -66,48 +62,54 @@ class Callback extends Collectable {
 
       $function_start = \function_start();
 
-		$spark = clone $this->spark;
+		$spark = $this->spark;
 		unset($this->spark);
 		$spark->curl = new Curl($this->logger);
+		$spark->logger = $this->logger;
+		// set logger for extension
 
-		$storage = clone $this->storage;
+		$storage = $this->storage;
 		unset($this->storage);
 
-		$extensions = clone $this->extensions;
+		$this->extensions_orig = $this->extensions;
 		unset($this->extensions);
+		$extensions = $this->extensions_orig;
 		$extensions->http = new Curl($this->logger);
 
+		$callback = $this->callback;
+		//unset($this->callback);
 
-		if (is_array($this->callback) && is_object($this->callback[0]))
-			$return = &$this->callback[0]->{$this->callback[1]}($spark, $this->logger, $storage, $extensions, $this->event);
+		if (
+			(is_array($callback) && is_object($callback[0]))
+			|| (is_object($callback) && is_object($callback[0]))
+			)
+			$return = $callback[0]->{$callback[1]}($spark, $this->logger, $storage, $extensions, $this->event);
 		else {
-			$callback = &$this->callback;
-			$return = $callback($spark, $this->logger, $storage, $extensions, $this->event);
+			$callback_ref = &$callback;
+			$return = $callback_ref($spark, $this->logger, $storage, $extensions, $this->event);
 		}
+		unset($callback);
 		if (!empty($return)) $storage = $return;
+		unset($return);
 
-		foreach ($spark->config['extensions'] as $extension => $extension_state) {
-			if (isset($this->$extension)) {
-				if (!isset($extensions->$extension->storage->$extension)) $extensions->$extension->storage->$extension = [];
-				$extension_diff = \array_diff_assoc_recursive($extensions->$extension->storage->$extension, $this->$extension);
-				if (!isset($storage->$extension)) $storage->$extension = [];
-				$storage->$extension = array_replace_recursive($storage->$extension, $extension_diff);
-				unset($this->$extension);
-			}
-		}
+		$this->extensions = $extensions;
+		unset($extensions);
 
 		$this->storage = $storage;
 		unset($storage);
 
 		unset($spark);
 		unset($this->event);
-		unset($this->callback);
 
       $this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 		unset($this->logger);
 
-		$this->setGarbage(); // do this last incase garbage is collected before we can log function end
+		$this->garbage = true;
 
+	}
+
+	public function isGarbage() : bool {
+		return $this->garbage;
 	}
 
 }
