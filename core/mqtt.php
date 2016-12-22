@@ -33,6 +33,7 @@ namespace phpMQTT;
 /* phpMQTT */
 class phpMQTT {
 	private $socket; 			/* holds the socket	*/
+	private $websocket_client; 			/* holds the socket	*/
 	public $websocket = false; 			/* should use websocket	*/
 	public $secure = false;	/* tls or not */
 	public $no_cert_checks = false;	/* make sure server certs are valid */
@@ -75,95 +76,67 @@ class phpMQTT {
 		inputs: $clean: should the client send a clean session flag */
 	function connect($clean = true, $will = NULL, $username = NULL, $password = NULL){
 
-		if ($this->websocket) {
-			if (!extension_loaded('websockets')) {
-					if($this->debug) error_log("websockets extension not loaded\n");
-					return false;
-			}
-		}
-		
 		$this->ping_received = null;
 		if($will) $this->will = $will;
 		if($username) $this->username = $username;
 		if($password) $this->password = $password;
-		if (!empty($this->proxy)) {
-			$socket_address = $this->proxy;
-			$socket_port = $this->proxy_port;
-		} else {
-			$socket_address = $this->address;	
-			$socket_port = $this->port;
-		}
-		$socket_scheme = "tcp://";
-		$context_options = array(
-			'ssl' => array(
-				'peer_name' => $this->address,
-				'verify_peer' => true,
-				'verify_peer_name' => true,
-				'allow_self_signed' => false,
-				),
-			);
-		if ($this->no_cert_checks) {
-			$context_options['ssl']['verify_peer'] = false;
-			$context_options['ssl']['verify_peer_name'] = false;
-			$context_options['ssl']['allow_self_signed'] = true;
-		}
-		$stream_context = stream_context_create($context_options);
-		$this->socket = stream_socket_client($socket_scheme.$socket_address.':'.$socket_port, $errno, $errstr, 60, STREAM_CLIENT_CONNECT, $stream_context);
-		if (!$this->socket ) {
-		    if($this->debug) error_log("stream_socket_client() $errno, $errstr \n");
-			return false;
-		}
-		if ($this->proxy) {
-			$connect_via_proxy = 
-				"CONNECT ".$this->address.":".$this->port." HTTP/1.1\r\n".
-				"Host ".$this->address.":".$this->port."\r\n".
-				"User-Agent: Curl\r\n".
-				"Proxy-Connection: Keep-Alive\r\n\r\n";
-			fwrite($this->socket, $connect_via_proxy);
-			$i=0;
-			$response='';
-			while ($line = fgets($this->socket)) {
-				if ($i == 0 && !preg_match("/^HTTP.*\s+200\s+.*$/", $line)) {
-					if($this->debug) error_log("proxy connect failed: $line \n");
-					return false;
-				}
-				$response .= $line;
-				if (preg_match("/\r\n\r\n$/", $response)) break;
-				$i++;
-			}
-		}
-		if ($this->secure) {
-			if (!stream_socket_enable_crypto($this->socket,true,STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
-					if($this->debug) error_log("enable tls failed\n");
-					return false;
-			}
-		}
+		
 		if ($this->websocket) {
-			$header = "GET / HTTP/1.1"."\r\n".
-				"Upgrade: websocket"."\r\n".
-				"Connection: Upgrade"."\r\n".
-				"Host: ".$this->address.":".$this->port."\r\n".
-				"Sec-WebSocket-Version: 13"."\r\n".
-				"Sec-WebSocket-Protocol: mqtt"."\r\n".
-				"Sec-WebSocket-Key: ".uniqid()."=="."\r\n\r\n";
-
-				if (empty(fwrite($this->socket, $header))) {
-					if($this->debug) error_log("websocket connect header send failed \n");
-					return false;
-				}
-				$i=0;
-				$response='';
-				while ($line = fgets($this->socket)) {
-					//if($this->debug) error_log("response: ".rtrim($line));
-					if ($i == 0 && !preg_match("/^HTTP.*\s+101\s+.*$/", $line)) {
-						if($this->debug) error_log("websocket connect failed: $line \n");
-						return false;
-					}
-					$response .= $line;
-					if (preg_match("/\r\n\r\n$/", $response)) break;
-					$i++;
-				}
+			// order is important
+			require(__DIR__.'/websocket/Exception.php');   
+			require(__DIR__.'/websocket/BadOpcodeException.php');   
+			require(__DIR__.'/websocket/BadUriException.php');   
+			require(__DIR__.'/websocket/ConnectionException.php');   
+			require(__DIR__.'/websocket/Base.php');   
+			require(__DIR__.'/websocket/Client.php');   
+			if (!empty($this->proxy) && !empty($this->proxy_port)) {
+				$opts = [
+					'http' => [
+						'proxy' => 'tcp://'.$this->proxy.':'.$this->proxy_port,
+						]
+					];
+			} else $opts = [];
+			$context = stream_context_create($opts);
+			$headers = [
+				'Sec-WebSocket-Protocol' => 'mqtt'
+				];
+			if ($this->secure) $scheme = 'wss';
+			else $scheme = 'ws';
+			$this->websocket_client = new \WebSocket\Client("$scheme://$this->address:$this->port", ['context' => $context, 'headers' => $headers, 'timeout' => 60]);
 		} else {
+			if (!empty($this->proxy)) {
+				$socket_address = $this->proxy;
+				$socket_port = $this->proxy_port;
+			} else {
+				$socket_address = $this->address;	
+				$socket_port = $this->port;
+			}
+			$socket_scheme = "tcp://";
+			$context_options = array(
+				'ssl' => array(
+					'peer_name' => $this->address,
+					'verify_peer' => true,
+					'verify_peer_name' => true,
+					'allow_self_signed' => false,
+					),
+				);
+			if ($this->no_cert_checks) {
+				$context_options['ssl']['verify_peer'] = false;
+				$context_options['ssl']['verify_peer_name'] = false;
+				$context_options['ssl']['allow_self_signed'] = true;
+			}
+			$stream_context = stream_context_create($context_options);
+			$this->socket = stream_socket_client($socket_scheme.$socket_address.':'.$socket_port, $errno, $errstr, 60, STREAM_CLIENT_CONNECT, $stream_context);
+			if (!$this->socket ) {
+			    if($this->debug) error_log("stream_socket_client() $errno, $errstr \n");
+				return false;
+			}
+			if ($this->secure) {
+				if (!stream_socket_enable_crypto($this->socket,true,STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
+						if($this->debug) error_log("enable tls failed\n");
+						return false;
+				}
+			}
 			stream_set_timeout($this->socket, 5);
 			stream_set_blocking($this->socket, 0);
 		}
@@ -204,12 +177,10 @@ class phpMQTT {
 		$head = chr(0x10);
 		$head .= $this->setmsglength($i);
 		if ($this->websocket) {
-			ws_send_frame($this->socket, $head.$buffer, 'binary', true);
-			//ws_send_frame($this->socket, $buffer, 'binary', true);
-			$info = ws_get_frame_info($this->socket);
-			$data = ws_read_frame($info);
+			$this->websocket_client->send($head.$buffer);
+			$data = $this->websocket_client->receive();
 			$stream = fopen('php://memory','r+');
-			fwrite($stream, $data['data']);
+			fwrite($stream, $data);
 			rewind($stream);
 		 	$string = $this->read(4, false, $stream);
 			fclose($stream);
@@ -251,6 +222,7 @@ class phpMQTT {
 		
 			return $string;
 	}
+
 	/* unsubscribe: unsubscribe from topics */
 	function unsubscribe($topics, $qos = 0){
 		$i = 0;
@@ -270,12 +242,10 @@ class phpMQTT {
 		$head .= $this->setmsglength($i);
 
 		if ($this->websocket) {
-			$bytes_sent = ws_send_frame($this->socket, $head.$buffer, 'binary', true);
-			//ws_send_frame($this->socket, $buffer, 'binary', true);
-			$info = ws_get_frame_info($this->socket);
-			$data = ws_read_frame($info);
+			$this->websocket_client->send($head.$buffer);
+			$data = $this->websocket_client->receive();
 			$stream = fopen('php://memory','r+');
-			fwrite($stream, $data['data']);
+			fwrite($stream, $data);
 			rewind($stream);
 			$string = $this->read(2, false, $stream);
 			$bytes = ord(substr($string,1,1));
@@ -310,12 +280,10 @@ class phpMQTT {
 		$head .= $this->setmsglength($i);
 
 		if ($this->websocket) {
-			$bytes_sent = ws_send_frame($this->socket, $head.$buffer, 'binary', true);
-			//ws_send_frame($this->socket, $buffer, 'binary', true);
-			$info = ws_get_frame_info($this->socket);
-			$data = ws_read_frame($info);
+			$this->websocket_client->send($head.$buffer);
+			$data = $this->websocket_client->receive();
 			$stream = fopen('php://memory','r+');
-			fwrite($stream, $data['data']);
+			fwrite($stream, $data);
 			rewind($stream);
 			$string = $this->read(2, false, $stream);
 			$bytes = ord(substr($string,1,1));
@@ -336,7 +304,7 @@ class phpMQTT {
 			$head = " ";
 			$head = chr(0xc0);		
 			$head .= chr(0x00);
-			if ($this->websocket) ws_send_frame($this->socket, $head, 'binary', true);
+			if ($this->websocket) $this->websocket_client->send($head);
 			else fwrite($this->socket, $head, 2);
 			$this->ping_sent = time();
 			if($this->debug) echo "ping sent\n";
@@ -346,20 +314,20 @@ class phpMQTT {
 			$head = " ";
 			$head{0} = chr(0xe0);		
 			$head{1} = chr(0x00);
-			if ($this->websocket) ws_send_frame($this->socket, $head, 'binary', true);
+			if ($this->websocket) $this->websocket_client->send($head);
 			else fwrite($this->socket, $head, 2);
 	}
 	/* close: sends a proper disconect, then closes the socket */
 	function close(){
 	 	$this->disconnect();
-		fclose($this->socket);	
+		if ($this->websocket) unset($this->websocket_client);
+		else fclose($this->socket);
 	}
 	/* publish: publishes $content on a $topic */
 	function publish($topic, $content, $qos = 0, $retain = 0){
 		$i = 0;
 		$buffer = "";
 		$buffer .= $this->strwritestring($topic,$i);
-		//$buffer .= $this->strwritestring($content,$i);
 		if($qos){
 			$id = $this->msgid++;
 			$buffer .= chr($id >> 8);  $i++;
@@ -374,20 +342,17 @@ class phpMQTT {
 		$head .= $this->setmsglength($i);
 		$response_cmd = 0;
 		if ($this->websocket) {
-			$bytes_sent = ws_send_frame($this->socket, $head.$buffer, 'binary', true);
-			//ws_send_frame($this->socket, $buffer, 'binary', true);
+			$this->websocket_client->send($head.$buffer);
 			if (!empty($qos)) {
-				$info = ws_get_frame_info($this->socket);
-				$data = ws_read_frame($info);
+				$data = $this->websocket_client->receive();
 				$stream = fopen('php://memory','r+');
-				fwrite($stream, $data['data']);
+				fwrite($stream, $data);
 				rewind($stream);
 				$byte = $this->read(1, true, $stream);
 				$response_cmd = (int)(ord($byte)/16);
 				fclose($stream);
 			}
 		} else {
-			//fwrite($this->socket, $head, strlen($head));
 			fwrite($this->socket, $head.$buffer, $i);
 			if (!empty($qos)) {
 				stream_set_blocking($this->socket, 1);
@@ -432,7 +397,7 @@ class phpMQTT {
 			$cmd = 0;
 			
 				//$byte = fgetc($this->socket);
-			if(feof($this->socket)){
+			if(!$this->websocket && feof($this->socket)){
 				if($this->debug) echo "eof receive going to reconnect for good measure\n";
 				fclose($this->socket);
 				$this->connect_auto(false);
@@ -444,13 +409,17 @@ class phpMQTT {
 			}
 			
 			if ($this->websocket) {
-				stream_set_blocking($this->socket, 0);
+				/*
 				$info = @ws_get_frame_info($this->socket);
 				$data = @ws_read_frame($info);
+				*/
+				socket_set_blocking($this->websocket_client->socket, 0);
+				$data = $this->websocket_client->receive();
+				socket_set_blocking($this->websocket_client->socket, 1);
 				$byte = '';
 				$stream = fopen('php://memory','r+');
-				if (!empty($data['data'])) {
-					fwrite($stream, $data['data']);
+				if (!empty($data)) {
+					fwrite($stream, $data);
 					rewind($stream);
 					$byte = $this->read(1, true, $stream);
 				}
@@ -503,7 +472,6 @@ class phpMQTT {
 			}
 			if ($this->websocket) {
 				if (!empty($stream)) fclose($stream);
-				stream_set_blocking($this->socket, 1);
 			}
 			if (empty($this->ping_received)) $this->ping_received = time();
 			if(time() - $this->ping_received >= $this->keepalive){
@@ -512,7 +480,8 @@ class phpMQTT {
 			
 			if((time() - $this->ping_received) >= ($this->keepalive * 2)){
 				if($this->debug) echo "not seen a ping response in a while, disconnecting\n";
-				fclose($this->socket);
+				if ($this->websocket) unset($this->websocket_client);
+				else fclose($this->socket);
 				$this->connect_auto(false);
 				if(count($this->topics)) {
 					if ($this->websocket) {
