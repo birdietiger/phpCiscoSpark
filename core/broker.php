@@ -104,9 +104,12 @@ class MessageBroker {
 
 		foreach ($this->subscribe_topics as $topic => $topic_details) {
 			if (!$broker_client->subscribe(array($topic => $topic_details))) {
-				if (!empty($this->subscribed_to_topics[$topic])) continue;
-				$this->logger->addError(__FILE__.": ".__METHOD__.": failed to subscribe to topic");
-			} else $this->subscribed_to_topics[$topic] = true;
+				$this->logger->addError(__FILE__.": ".__METHOD__.": failed to subscribe to topic: ".$topic);
+				//if (!empty($this->subscribed_to_topics[$topic])) continue;
+			} else {
+				$this->logger->addInfo(__FILE__.": ".__METHOD__.": subscribed to topic: ".$topic);
+				$this->subscribed_to_topics[$topic] = true;
+			}
 		}
 		
 		return $broker_client;

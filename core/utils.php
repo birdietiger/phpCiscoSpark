@@ -27,32 +27,32 @@ function set_timezone() {
 }
 
 function remove_missing_array_assoc_recursive($new_array, &$old_array) {
-   foreach($old_array as $key => $value){
-      if (is_array($value)) {
-         if (!isset($new_array[$key]))
+	foreach($old_array as $key => $value){
+		if (is_array($value)) {
+			if (!isset($new_array[$key]))
+				unset($old_array[$key]);
+			else
+				remove_missing_array_assoc_recursive($new_array[$key], $old_array[$key]);
+		} else if (!isset($new_array[$key]))
             unset($old_array[$key]);
-         else
-            remove_missing_array_assoc_recursive($new_array[$key], $old_array[$key]);
-      } else if (!isset($new_array[$key]))
-            unset($old_array[$key]);
-   }
+	}
 }
 
-function array_diff_assoc_recursive($array1, $array2) {
-	foreach($array1 as $key => $value){
+function array_diff_assoc_recursive($new_array, $old_array) {
+	foreach($new_array as $key => $value){
 		if(is_array($value)){
-			if(!isset($array2[$key]))
+			if(!isset($old_array[$key]))
 				$difference[$key] = $value;
-			elseif(!is_array($array2[$key]))
+			elseif(!is_array($old_array[$key]))
 				$difference[$key] = $value;
 			else {
-				$new_diff = array_diff_assoc_recursive($value, $array2[$key]);
+				$new_diff = array_diff_assoc_recursive($value, $old_array[$key]);
 				if($new_diff != FALSE)
 					$difference[$key] = $new_diff;
 			}
 		} elseif (
-			(!isset($array2[$key]) || $array2[$key] != $value) && 
-			!(isset($array2[$key]) && $array2[$key]===null && $value===null)
+			(!isset($old_array[$key]) || $old_array[$key] != $value) && 
+			!(isset($old_array[$key]) && $old_array[$key]===null && $value===null)
 			)
 			$difference[$key] = $value;
 	}

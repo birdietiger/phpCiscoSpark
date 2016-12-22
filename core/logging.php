@@ -19,9 +19,10 @@ class BasicLogger {
 		'EMERGENCY' => 7,
 		);
 
-	public function __construct($config = null) {
+	public function __construct($config = null, $uniq_id = '') {
 		$this->config = $config;
-		$this->uniqid = uniqid();
+		if (empty($uniq_id)) $this->uniqid = uniqid();
+		else $this->uniqid = $uniq_id;
 		if (isset($config['stdout']) && !$config['stdout']) $this->stdout = false;
 		if (!empty($config['stdout_level']) && isset($this->levels[$config['stdout_level']])) $this->stdout_level = $config['stdout_level'];
 		if (!empty($config['file'])) {
