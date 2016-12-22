@@ -540,7 +540,7 @@ class Spark {
 		$this->worker_pool->collect(function(Callback $job){
 			$function_start = \function_start();
 			if ($job->isGarbage()) {
-				$this->logger->addDebug(__FILE__.": Spark::collect_worker_garbage: collecting worker pool garbage");
+				$this->logger->addDebug(__FILE__.": Spark::collect_worker_garbage: collecting worker pool garbage: ".$job->uniqid);
 
 				remove_missing_array_assoc_recursive($job->storage->perm, $this->storage->perm);
 				$perm_diff = array_diff_assoc_recursive($job->storage->perm, $job->storage_perm_orig);
@@ -551,15 +551,36 @@ class Spark {
 				$this->storage->temp = array_replace_recursive($this->storage->temp, $temp_diff);
 
 				foreach ($this->config['extensions'] as $extension => $extension_state) {
-					if (isset($job->storage->$extension)) {
-						$this->storage->$extension = $job->storage->$extension;
-						unset($job->storage->$extension);
+					if (isset($job->extensions->$extension)) {
+						if (!isset($job->extensions->$extension->storage->$extension)) continue;
+						if (!isset($this->extensions->$extension->storage->$extension)) {
+							$this->extensions->$extension->storage->$extension = $job->extensions->$extension->storage->$extension;
+							continue;
+						}
+						remove_missing_array_assoc_recursive($job->extensions->$extension->storage->$extension, $this->extensions->$extension->storage->$extension);
+						$temp_diff = array_diff_assoc_recursive($job->extensions->$extension->storage->$extension, $job->extensions_orig->$extension->storage->$extension);
+						$this->extensions->$extension->storage->$extension = array_replace_recursive($this->extensions->$extension->storage->$extension, $temp_diff);
+						/*
+						foreach ($temp_diff as $key => $value) {
+							if (!isset($this->extensions->$extension->storage->$key)) {
+								$this->extensions->$extension->storage->$key = $value;
+								continue;
+							}
+							$this->extensions->$extension->storage->$key = array_replace_recursive($this->extensions->$extension->storage->$key, $temp_diff[$key]);
+						}
+						*/
+						unset($job->extensions->$extension);
 					}
 				}
+
 				unset($job->storage);
+				unset($job->extensions_orig);
 				$this->logger->addDebug(__FILE__.": Spark::collect_worker_garbage: ".\function_end($function_start));
+
 			}
+
 			return $job->isGarbage();
+
 		});
 
 	}
@@ -2214,7 +2235,7 @@ class Spark {
 		}
 
 		$is_admin = (!empty($event->permissions['admin'])) ? true : false;
-		if (!empty($this->admins) && !empty($event->rooms['id']) && empty($this->enabled_rooms[$event->rooms['id']])) {
+		if ($this->default_enabled_room === false && !empty($this->admins) && !empty($event->rooms['id']) && empty($this->enabled_rooms[$event->rooms['id']])) {
 			$this->logger->addWarning(__FILE__.": ".__METHOD__.": there are admins and this room hasn't been enabled");
 			$room_disabled = true;
 			if (!$is_admin && empty($event->permissions['super_user'])) {
@@ -2274,15 +2295,26 @@ class Spark {
 							$found_bot_command = true;
 						}
 					}
+					//$bot_command_message_data_markdown = null;
 					$bot_command_message_data_html = null;
-					if (
-						$found_bot_command
-						&& !empty($event->messages['html'])
-						) {
-						$html_mention = '<spark-mention data-object-type=\"person\" data-object-id=\"'.$this->me['id'].'\">.+<\/spark-mention>';
-						$remove_this = "/^\s*(<\/?[^>]+>\s*)*($html_mention\s*)?(<\/?[^>]+>\s*)*\/$bot_command\s*/";
-						$bot_command_message_data_html = trim(preg_replace($remove_this, "$1$3", $event->messages['html']));
+					if ($found_bot_command) {
+						//if (!empty($event->messages['markdown']))
+							//<@personEmail:banderson@example.com|Bobby> <@personId:Y2lzY29zcGFyazovL3VzL1BFT1BMRS9mNWIzNjE4Ny1jOGRkLTQ3MjctOGIyZi1mOWM0NDdmMjkwNDY|Jose>
+						//	$markdown_mention = '<@person(Email:'.$this->me['emails'][0].'|Id:'.$this->me['id'].')\|[^>]+>';
+						//	$remove_this = "/^\s*($markdown_mention\s*)?\/$bot_command\s*/";
+						//	$bot_command_message_data_markdown = preg_replace($remove_this, '', $event->messages['markdown']);
+						if (!empty($event->messages['html'])) {
+							$html_mention = '<spark-mention data-object-type=\"person\" data-object-id=\"'.$this->me['id'].'\">.+<\/spark-mention>';
+							$remove_this = "/^\s*(<\/?[^>]+>\s*)*($html_mention\s*)?(<\/?[^>]+>\s*)*\/$bot_command\s*/";
+							$bot_command_message_data_html = trim(preg_replace($remove_this, "$1$3", $event->messages['html']));
+						}
 					}
+					//if ($found_bot_command) {
+					//	if (!empty($event->messages['markdown']))
+					//		$bot_command_message_data_markdown = preg_replace("/^\s*\/$bot_command\s*/", '', $event->messages['markdown']);
+					//	if (!empty($event->messages['html']))
+					//		$bot_command_message_data_html = preg_replace("/^\s*(<[^>]+>)\s*(<[^>]+>\s*)*\/$bot_command\s*(<\/[^>]+>\s*)*\s*/", "$1", $event->messages['html']);
+					//}
 					if ($found_bot_command) {
 						$any_commands_found = true;
 						$event->command = array(
@@ -2290,6 +2322,7 @@ class Spark {
 							'options' => $bot_command_options,
 							'data' => $bot_command_message_data,
 							'data_text' => $bot_command_message_data,
+							//'data_markdown' => $bot_command_message_data_markdown,
 							'data_html' => $bot_command_message_data_html,
 							);
 						$this->logger->addInfo(__FILE__.": ".__METHOD__.": found command: ".json_encode($event->command));
@@ -2510,6 +2543,7 @@ class Spark {
 					}
 				}
 				if (!empty($event->matches)) {
+					$this->logger->addDebug(__FILE__.': '.__METHOD__.': search matches: '.json_encode($event->matches));
 					if ($this->multithreaded) $this->collect_worker_garbage();
 					foreach ($callbacks as $callback) {
 						if ($this->multithreaded) {
@@ -3002,6 +3036,7 @@ class Spark {
 				}
 				$api_url .= rtrim($get_params, '&');
 			} else $curl->params = json_encode($params, JSON_UNESCAPED_UNICODE);
+			//} else $curl->params = json_encode($params, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": after encode params: ".$curl->params);
 		}
 		
@@ -3368,21 +3403,21 @@ class Spark {
 		if (
 			$webhook_message['event'] == 'deleted'
 			|| $webhook_message['resource'] == 'memberships'
-			) $event->$webhook_message['resource'] = $webhook_message['data'];
+			) $event->{$webhook_message['resource']} = $webhook_message['data'];
 		else if (
 			!empty($id_name)
-			&& empty($event->$webhook_message['resource'] = $this->$webhook_message['resource']('GET', array($id_name => $webhook_message['data']['id'])))
+			&& empty($event->{$webhook_message['resource']} = $this->{$webhook_message['resource']}('GET', array($id_name => $webhook_message['data']['id'])))
 			) $this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook resource details: id name: $id_name id: ".$webhook_message['data']['id']);
 
 		if ($this->get_all_webhook_data == true) {
 
-			if (!empty($event->$webhook_message['resource'])) {
+			if (!empty($event->{$webhook_message['resource']})) {
 				$this->logger->addInfo(__FILE__.": ".__METHOD__.": getting all webhook data from all endpoints");
-				foreach ($event->$webhook_message['resource'] as $resource_detail_key => $resource_detail_value) {
+				foreach ($event->{$webhook_message['resource']} as $resource_detail_key => $resource_detail_value) {
 					if (!empty($endpoint_id_names[$resource_detail_key])) {
 						if ($webhook_message['event'] == 'deleted') {
 							if ($endpoint_id_names[$resource_detail_key] == $webhook_message['resource']) {
-								$event->$endpoint_id_names[$resource_detail_key] = $webhook_message['data'];
+								$event->{$endpoint_id_names[$resource_detail_key]} = $webhook_message['data'];
 							} else if (
 								$webhook_message['resource'] == 'memberships'
 								&& $endpoint_id_names[$resource_detail_key] == 'rooms'
@@ -3391,10 +3426,10 @@ class Spark {
 								$event->rooms = [ 'id' => $webhook_message['data']['roomId'] ];
 							}
 						}
-						if (empty($event->$endpoint_id_names[$resource_detail_key])) {
+						if (empty($event->{$endpoint_id_names[$resource_detail_key]})) {
 							$get_resource_params = array($resource_detail_key => $resource_detail_value);
 							//if ($endpoint_id_names[$resource_detail_key] == 'rooms') $get_resource_params['showSipAddress'] = true;
-							if (empty($event->$endpoint_id_names[$resource_detail_key] = $this->$endpoint_id_names[$resource_detail_key]('GET', $get_resource_params))) 
+							if (empty($event->{$endpoint_id_names[$resource_detail_key]} = $this->{$endpoint_id_names[$resource_detail_key]}('GET', $get_resource_params))) 
 								$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook resource details: id name: ".$resource_detail_key." id: ".$resource_detail_value);
 						}
 					}
@@ -3406,7 +3441,14 @@ class Spark {
 					$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook resource details: actorId ".$webhook_message['actorId']);
 			}
 
-			if (!empty($event->rooms['id'])) {
+			if (
+				!empty($event->rooms['type'])
+				&& $event->rooms['type'] == 'direct'
+				) {
+				// don't do any membership calls for direct
+			} else if (
+				!empty($event->rooms['id'])
+				) {
 
 				if (
 					$event->webhooks['resource'] == 'memberships'
@@ -4552,7 +4594,10 @@ class Spark {
 		}
 	
 		if (empty($room_details)) {
-			if (empty($room_details = $this->rooms('POST', [ 'title' => $title ]))) {
+			if (!empty($team_id)) $room_details = $this->rooms('POST', [ 'title' => $title, 'teamId' => $team_id ]);
+                        else $room_details = $this->rooms('POST', [ 'title' => $title ]);
+			//if (empty($room_details = $this->rooms('POST', [ 'title' => $title, 'teamId' => $team_id]))) {
+			if (empty($room_details)) {
 				$this->logger->addError(__FILE__.": ".__METHOD__.": failed to create room: $title");
 				$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 				return false;
@@ -4758,7 +4803,7 @@ class Spark {
 				}
 			} else { 
 				foreach ($this->cache[$api] as $id => $details) {
-					if ($details['timestamp'] + $this->cache_expires_in <= time()) {
+					if (!empty($details['timestamp']) && $details['timestamp'] + $this->cache_expires_in <= time()) {
 						if ($api == 'memberships') {
 							unset($this->cache['memberships_room_person'][$details['data']['roomId']][$details['data']['personId']]);
 							unset($this->cache['memberships_room_person'][$details['data']['roomId']][$details['data']['personEmail']]);
