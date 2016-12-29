@@ -503,16 +503,6 @@ class Spark {
 				$next_garbage_check = microtime(true)*1000000 + $this->loop_timers['garbage'];
 			}
 
-			if (!empty($this->mqtt_queue)) {
-				foreach ($this->mqtt_queue as $mqtt_publish) {
-					if (!empty($this->broker_client->publish($mqtt_publish['topic'], $mqtt_publish['message'])))
-						$this->logger->addDebug(__FILE__.": ".__METHOD__.": published from mqtt queue. topic: ".$mqtt_publish['topic']." message: ".$mqtt_publish['message']);
-					else
-						$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't publish from mqtt queue. topic: ".$mqtt_publish['topic']." message: ".$mqtt_publish['message']);
-				}
-				$this->mqtt_queue = [];
-			}
-
 			// update message subscriptions
 			if ($this->reload_subscriptions) {
 				foreach ($this->broker->subscribe_topics as $topic => $topic_details) {
@@ -602,8 +592,10 @@ class Spark {
 							if (is_string($mqtt_publish['message'])) $message = $mqtt_publish['message'];
 							else if (is_array($mqtt_publish['message'])) $message = json_encode($mqtt_publish['message']);
 
-							array_push($this->mqtt_queue, [ 'topic' => $mqtt_publish['topic'], 'message' => $message ]);
-							$this->logger->addDebug(__FILE__.": ".__METHOD__.": added publish to mqtt queue. topic: ".$mqtt_publish['topic']." message: ".$message);
+							if (!empty($this->broker_client->publish($mqtt_publish['topic'], $message)))
+								$this->logger->addDebug(__FILE__.": ".__METHOD__.": published from mqtt queue. topic: ".$mqtt_publish['topic']." message: ".$message);
+							else
+								$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't publish from mqtt queue. topic: ".$mqtt_publish['topic']." message: ".$message);
 
 						} else
 							$this->logger->addError(__FILE__.": ".__METHOD__.": invalid publish for mqtt queue");
