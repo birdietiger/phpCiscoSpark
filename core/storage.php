@@ -8,6 +8,7 @@ class Storage {
 	protected $original_perm;
 	protected $original_temp;
 	public $perm = array();
+	public $mqtt = array();
 	public $temp = array();
 
    public function __construct($logger = null, $config = null) {
@@ -73,7 +74,7 @@ class Storage {
 	}
 
 	public function clear($type) {
-		if (!in_array($type, array('temp', 'perm'))) {
+		if (!in_array($type, array('mqtt', 'temp', 'perm'))) {
 			$this->logger->addWarning(__FILE__.": ".__METHOD__.": invalid storage type: $type");
 			return false;
 		}

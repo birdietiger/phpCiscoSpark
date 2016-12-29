@@ -2,6 +2,7 @@
 
 class Spark {
 
+	protected $mqtt_queue = [];
 	protected $phone_regex = '/[\(\+]?\d[\d\s\-\.\(\)]*\d{2}[\d\s\-\.\(\)]*\d(\s*(x|e|ex|ext|extension)\.?\s*\d+)?/i';
 	protected $email_regex = '/(?!(?:(?:\x22?\x5C[\x00-\x7E]\x22?)|(?:\x22?[^\x5C\x22]\x22?)){255,})(?!(?:(?:\x22?\x5C[\x00-\x7E]\x22?)|(?:\x22?[^\x5C\x22]\x22?)){65,}@)(?:(?:[\x21\x23-\x27\x2A\x2B\x2D\x2F-\x39\x3D\x3F\x5E-\x7E]+)|(?:\x22(?:[\x01-\x08\x0B\x0C\x0E-\x1F\x21\x23-\x5B\x5D-\x7F]|(?:\x5C[\x00-\x7F]))*\x22))(?:\.(?:(?:[\x21\x23-\x27\x2A\x2B\x2D\x2F-\x39\x3D\x3F\x5E-\x7E]+)|(?:\x22(?:[\x01-\x08\x0B\x0C\x0E-\x1F\x21\x23-\x5B\x5D-\x7F]|(?:\x5C[\x00-\x7F]))*\x22)))*@(?:(?:(?!.*[^.]{64,})(?:(?:(?:xn--)?[a-z0-9]+(?:-[a-z0-9]+)*\.){1,126}){1,}(?:(?:[a-z][a-z0-9]*)|(?:(?:xn--)[a-z0-9]+))(?:-[a-z0-9]+)*)|(?:\[(?:(?:IPv6:(?:(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){7})|(?:(?!(?:.*[a-f0-9][:\]]){7,})(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){0,5})?::(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){0,5})?)))|(?:(?:IPv6:(?:(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){5}:)|(?:(?!(?:.*[a-f0-9]:){5,})(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){0,3})?::(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){0,3}:)?)))?(?:(?:25[0-5])|(?:2[0-4][0-9])|(?:1[0-9]{2})|(?:[1-9]?[0-9]))(?:\.(?:(?:25[0-5])|(?:2[0-4][0-9])|(?:1[0-9]{2})|(?:[1-9]?[0-9]))){3}))\]))/iD';
 	protected $url_regex = '_(?:(?:[a-z]+):///?)(?:\S+(?::\S*)?@)?(?:(?!10(?:\.\d{1,3}){3})(?!127(?:\.\d{1,3}){3})(?!169\.254(?:\.\d{1,3}){2})(?!192\.168(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z\x{00a1}-\x{ffff}0-9]+-?)*[a-z\x{00a1}-\x{ffff}0-9]+)(?:\.(?:[a-z\x{00a1}-\x{ffff}0-9]+-?)*[a-z\x{00a1}-\x{ffff}0-9]+)*(?:\.(?:[a-z\x{00a1}-\x{ffff}]{2,})))(?::\d{2,5})?(?:/[^\s]*)?_iuS';
@@ -502,6 +503,16 @@ class Spark {
 				$next_garbage_check = microtime(true)*1000000 + $this->loop_timers['garbage'];
 			}
 
+			if (!empty($this->mqtt_queue)) {
+				foreach ($this->mqtt_queue as $mqtt_publish) {
+					if (!empty($this->broker_client->publish($mqtt_publish['topic'], $mqtt_publish['message']))) {
+						$this->logger->addDebug(__FILE__.": ".__METHOD__.": published from mqtt queue. topic: ".$mqtt_publish['topic']." message: ".$mqtt_publish['message']);
+					else
+						$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't publish from mqtt queue. topic: ".$mqtt_publish['topic']." message: ".$mqtt_publish['message']);
+				}
+				$this->mqtt_queue = [];
+			}
+
 			// update message subscriptions
 			if ($this->reload_subscriptions) {
 				foreach ($this->broker->subscribe_topics as $topic => $topic_details) {
@@ -571,6 +582,34 @@ class Spark {
 						*/
 						unset($job->extensions->$extension);
 					}
+				}
+
+				if (!empty($job->storage->mqtt) && is_array($job->storage->mqtt)) {
+
+					foreach ($job->storage->mqtt as $mqtt_publish) {
+
+						if (
+							is_array($mqtt_publish)
+							&& !empty($mqtt_publish['topic'])
+							&& is_string($mqtt_publish['topic'])
+							&& !empty($mqtt_publish['message'])
+							&& (
+								is_string($mqtt_publish['message'])
+								|| is_array($mqtt_publish['message'])
+								)
+							) {
+
+							if (is_string($mqtt_publish['message'])) $message = $mqtt_publish['message'];
+							else if (is_array($mqtt_publish['message'])) $message = json_encode($mqtt_publish['message']);
+
+							array_push($this->mqtt_queue, [ 'topic' => $mqtt_publish['topic'], 'message' => $message ]);
+							$this->logger->addDebug(__FILE__.": ".__METHOD__.": added publish to mqtt queue. topic: ".$mqtt_publish['topic']." message: ".$message);
+
+						} else
+							$this->logger->addError(__FILE__.": ".__METHOD__.": invalid publish for mqtt queue");
+
+					}
+
 				}
 
 				unset($job->storage);
@@ -4575,9 +4614,15 @@ class Spark {
 	}
 
 
-	public function create_room($title, $participants, $moderators = null, $text = null, $files = null, $reuse_latest = false, $team_id = null) {
+	public function create_room($title, $participants = null, $moderators = null, $text = null, $files = null, $reuse_latest = false, $team_id = null) {
 
 		$function_start = \function_start();
+
+		if (empty($participants) && empty($moderators)) {
+			$this->logger->addError(__FILE__.": ".__METHOD__.": no participants or moderators");
+			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
+			return false;
+		}
 
 		if (!empty($reuse_latest)) {
 			$room_details_tmp = [];
@@ -4619,6 +4664,7 @@ class Spark {
 		}
 
 		if (!empty($moderators)) {
+
 			if (empty($membership_details['isModerator'])) {
 				if (empty($membership_details = $this->memberships('PUT', [ 'membershipId' => $membership_details['id'], 'isModerator' => true ]))) {
 					$this->logger->addError(__FILE__.": ".__METHOD__.": failed to make bot moderator: room_id: ".$room_details['id']);
@@ -4626,15 +4672,18 @@ class Spark {
 					return false;
 				}
 				$this->logger->addInfo(__FILE__.": ".__METHOD__.": made bot moderator: room_id: ".$room_details['id']);
-			} else 
+			} else
 				$this->logger->addInfo(__FILE__.": ".__METHOD__.": bot is already moderator: room_id: ".$room_details['id']);
-		}
-	
-		if (empty($this->add_users($moderators, $room_details['id'], 'room', true)))
-			$this->logger->addError(__FILE__.": ".__METHOD__.": adding moderators encountered errors");
 
-		if (empty($this->add_users($participants, $room_details['id'])))
-			$this->logger->addError(__FILE__.": ".__METHOD__.": adding participants encountered errors");
+			if (empty($this->add_users($moderators, $room_details['id'], 'room', true)))
+				$this->logger->addError(__FILE__.": ".__METHOD__.": adding moderators encountered errors");
+
+		}
+
+		if (!empty($participants)) {
+			if (empty($this->add_users($participants, $room_details['id'])))
+				$this->logger->addError(__FILE__.": ".__METHOD__.": adding participants encountered errors");
+		}
 
 		if (!empty($text) || !empty($files)) {
 			if (!empty($files)) $params = [ 'markdown' => $text, 'files' => $files, 'roomId' => $room_details['id'] ];
