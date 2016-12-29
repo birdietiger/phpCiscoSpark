@@ -505,7 +505,7 @@ class Spark {
 
 			if (!empty($this->mqtt_queue)) {
 				foreach ($this->mqtt_queue as $mqtt_publish) {
-					if (!empty($this->broker_client->publish($mqtt_publish['topic'], $mqtt_publish['message']))) {
+					if (!empty($this->broker_client->publish($mqtt_publish['topic'], $mqtt_publish['message'])))
 						$this->logger->addDebug(__FILE__.": ".__METHOD__.": published from mqtt queue. topic: ".$mqtt_publish['topic']." message: ".$mqtt_publish['message']);
 					else
 						$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't publish from mqtt queue. topic: ".$mqtt_publish['topic']." message: ".$mqtt_publish['message']);
