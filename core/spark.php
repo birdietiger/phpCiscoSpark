@@ -498,10 +498,10 @@ class Spark {
 			$this->broker_client->proc(false);
 
 			// collect worker garbage
-			if ($this->multithreaded && $next_garbage_check <= microtime(true)*1000000) {
+			//if ($this->multithreaded && $next_garbage_check <= microtime(true)*1000000) {
 				$this->collect_worker_garbage();
-				$next_garbage_check = microtime(true)*1000000 + $this->loop_timers['garbage'];
-			}
+			//	$next_garbage_check = microtime(true)*1000000 + $this->loop_timers['garbage'];
+			//}
 
 			// update message subscriptions
 			if ($this->reload_subscriptions) {
@@ -543,11 +543,11 @@ class Spark {
 			if ($job->isGarbage()) {
 				$this->logger->addDebug(__FILE__.": Spark::collect_worker_garbage: collecting worker pool garbage: ".$job->uniqid);
 
-				remove_missing_array_assoc_recursive($job->storage->perm, $this->storage->perm);
+				remove_missing_array_assoc_recursive($job->storage->perm, $job->storage_perm_orig, $this->storage->perm);
 				$perm_diff = array_diff_assoc_recursive($job->storage->perm, $job->storage_perm_orig);
 				$this->storage->perm = array_replace_recursive($this->storage->perm, $perm_diff);
 
-				remove_missing_array_assoc_recursive($job->storage->temp, $this->storage->temp);
+				remove_missing_array_assoc_recursive($job->storage->temp, $job->storage_temp_orig, $this->storage->temp);
 				$temp_diff = array_diff_assoc_recursive($job->storage->temp, $job->storage_temp_orig);
 				$this->storage->temp = array_replace_recursive($this->storage->temp, $temp_diff);
 
@@ -558,7 +558,7 @@ class Spark {
 							$this->extensions->$extension->storage->$extension = $job->extensions->$extension->storage->$extension;
 							continue;
 						}
-						remove_missing_array_assoc_recursive($job->extensions->$extension->storage->$extension, $this->extensions->$extension->storage->$extension);
+						remove_missing_array_assoc_recursive($job->extensions->$extension->storage->$extension, $job->extensions_orig->$extension->storage->$extension, $this->extensions->$extension->storage->$extension);
 						$temp_diff = array_diff_assoc_recursive($job->extensions->$extension->storage->$extension, $job->extensions_orig->$extension->storage->$extension);
 						$this->extensions->$extension->storage->$extension = array_replace_recursive($this->extensions->$extension->storage->$extension, $temp_diff);
 						/*
@@ -598,7 +598,7 @@ class Spark {
 								$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't publish from mqtt queue. topic: ".$mqtt_publish['topic']." message: ".$message);
 
 						} else
-							$this->logger->addError(__FILE__.": ".__METHOD__.": invalid publish for mqtt queue");
+							$this->logger->addError(__FILE__.": ".__METHOD__.": invalid publish for mqtt queue: ".json_encode($mqtt_publish));
 
 					}
 

@@ -26,15 +26,18 @@ function set_timezone() {
    date_default_timezone_set($timezone);
 }
 
-function remove_missing_array_assoc_recursive($new_array, &$old_array) {
+function remove_missing_array_assoc_recursive($new_array, $old_array, &$perm_array) {
 	foreach($old_array as $key => $value){
-		if (is_array($value)) {
+		if (
+			is_array($value)
+			|| is_object($value)
+			) {
 			if (!isset($new_array[$key]))
-				unset($old_array[$key]);
+				unset($perm_array[$key]);
 			else
-				remove_missing_array_assoc_recursive($new_array[$key], $old_array[$key]);
+					remove_missing_array_assoc_recursive($new_array[$key], $old_array[$key], $perm_array[$key]);
 		} else if (!isset($new_array[$key]))
-            unset($old_array[$key]);
+            unset($perm_array[$key]);
 	}
 }
 
