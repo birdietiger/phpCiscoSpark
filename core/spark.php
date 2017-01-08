@@ -652,7 +652,9 @@ class Spark {
 			return false;
 		}
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
-		return $this->spark_api($method, $api, $api_url, $params);
+		if (!empty($team = $this->spark_api($method, $api, $api_url, $params)))
+			$team['roomId'] = base64_encode(str_replace('TEAM', 'ROOM', base64_decode($team['id'])));
+		return $team;
 	}
 
 	public function team_memberships($method, $params = null) {
@@ -2043,7 +2045,10 @@ class Spark {
 	public function bot_command_help_mod($spark, $logger, $storage, $extensions, $event) {
 		$function_start = \function_start();
 
-		if (empty($event->memberships['items'][0]['isModerator'])) return false;
+		if (
+			empty($event->memberships['items'][0]['isModerator'])
+			&& empty($event->team_memberships['items'][0]['isModerator'])
+			) return false;
 		// order of commands is based on location of functions in file
 		$max_command_length = 0;
 		foreach ($spark->bot_triggers['modcommand'] as $bot_command => $bot_command_details) {
@@ -2199,7 +2204,13 @@ class Spark {
 			if (preg_match("/^".$spark->bot_control_command."\//", $bot_command_details['label']) > 0) $last_text .= '> `'.$bot_command_details['label'].'`'.$spacer."\t".$description."\n\n";
 			else $text .= '> `'.$bot_command_details['label'].'`'.$spacer."\t".$description."\n\n";
 		}
-		if (!empty($event->memberships['items'][0]['isModerator']) && !empty($spark->bot_triggers['modcommand'])) {
+		if (
+			!empty($spark->bot_triggers['modcommand'])
+			&& (
+				!empty($event->memberships['items'][0]['isModerator'])
+				|| !empty($event->team_memberships['items'][0]['isModerator'])
+				)
+			) {
 			$description = (!empty($spark->bot_triggers['modcommand']['help\/mod']['description'])) ? $spark->bot_triggers['modcommand']['help\/mod']['description'] : '';
 			$text .= '> `'.$spark->bot_triggers['modcommand']['help\/mod']['label'].'`'.$spacer."\t".$description."\n\n";
 		}
@@ -2286,7 +2297,11 @@ class Spark {
 			$callbacks = [];
 			foreach (array('command', 'modcommand', 'sucommand', 'admincommand') as $command_type) {
 				if (($command_type == 'command' || $command_type == 'modcommand') && !empty($room_disabled)) continue;
-				if ($command_type == 'modcommand' && empty($event->memberships['items'][0]['isModerator'])) continue;
+				if (
+					$command_type == 'modcommand'
+					&& empty($event->memberships['items'][0]['isModerator'])
+					&& empty($event->team_memberships['items'][0]['isModerator'])
+				) continue;
 				if ($command_type == 'admincommand' && empty($is_admin)) continue;
 				if ($command_type == 'sucommand' && empty($is_admin) && !$event->permissions['super_user']) continue;
 				if (empty($this->bot_triggers[$command_type])) continue;
@@ -3515,6 +3530,15 @@ class Spark {
 						$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook memberships resource details: roomId: ".$event->rooms['id']." personId: ".$event->people['id']);
 				}
 	
+			}
+
+			if (
+				!empty($event->rooms['teamId'])
+				&& !empty($event->people['id'])
+				) {
+				$team_room_id = base64_encode(str_replace('TEAM', 'ROOM', base64_decode($event->rooms['teamId'])));
+				if (empty($event->team_memberships = $this->memberships('GET', array('roomId' => $team_room_id, 'personId' => $event->people['id']))))
+					$this->logger->addError(__FILE__.": ".__METHOD__.": couldn't get webhook team memberships resource details: roomId: ".$team_room_id." personId: ".$event->people['id']);
 			}
 	
 			if (!empty($event->updated)) {
