@@ -43,10 +43,16 @@ function remove_missing_array_assoc_recursive($new_array, $old_array, &$perm_arr
 
 function array_diff_assoc_recursive($new_array, $old_array) {
 	foreach($new_array as $key => $value){
-		if(is_array($value)){
+		if(
+			is_array($value)
+			|| is_object($value)
+			){
 			if(!isset($old_array[$key]))
 				$difference[$key] = $value;
-			elseif(!is_array($old_array[$key]))
+			elseif(
+				!is_array($old_array[$key])
+				&& !is_object($old_array[$key])
+				)
 				$difference[$key] = $value;
 			else {
 				$new_diff = array_diff_assoc_recursive($value, $old_array[$key]);
