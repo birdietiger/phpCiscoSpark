@@ -94,7 +94,7 @@ class Watson_Conversation {
 		}
 
 		$params = [
-			'input' => [ 'text' => $event->messages['text'] ],
+			'input' => [ 'text' => str_replace("\n", ' ', $event->messages['text']) ],
 			'alternate_intents' => $alt_intents
 			];
 		if (!empty($context)) $params['context'] = $context;
@@ -117,13 +117,73 @@ class Watson_Conversation {
 			$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 			return false;
 		}
+		$prev_entities = [];
+		$prev_intents = [];
+		$prev_inputs = [];
 		if ($room_context === true) {
-			if (!empty($event->rooms['id']))
-				$this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['context'] = $result['context'];
+			if (!empty($event->rooms['id'])) {
+				if (!empty($this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']])) {
+					$prev_entities = $this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['entities'];
+					$prev_intents = $this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['intents'];
+					$prev_inputs = $this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['inputs'];
+				}
+				if ($result['context']['system']['dialog_stack'][0]['dialog_node'] == 'root') {
+					$this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']] = [
+						'context' => $result['context'],
+						'entities' => [],
+						'intents' => [],
+						'inputs' => [],
+						];
+				} else {
+					$this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['context'] = $result['context'];
+					if (!empty($result['entities']))
+						$this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['entities'][] = $result['entities'];
+					else
+						$this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['entities'][] = [];
+					if (!empty($result['intents']))
+						$this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['intents'][] = $result['intents'];
+					else
+						$this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['intents'][] = [];
+					if (!empty($result['input']))
+						$this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['inputs'][] = $result['input'];
+					else
+						$this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['inputs'][] = [];
+				}
+			}
 		} else {
-			if (!empty($event->rooms['id']) && !empty($event->people['id']))
-				$this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['people'][$event->people['id']]['context'] = $result['context'];
+			if (!empty($event->rooms['id']) && !empty($event->people['id'])) {
+				if (!empty($this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['people'][$event->people['id']])) {
+					$prev_entities = $this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['people'][$event->people['id']]['entities'];
+					$prev_intents = $this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['people'][$event->people['id']]['intents'];
+					$prev_inputs = $this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['people'][$event->people['id']]['inputs'];
+				}
+				if ($result['context']['system']['dialog_stack'][0]['dialog_node'] == 'root') {
+					$this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['people'][$event->people['id']] = [
+						'context' => $result['context'],
+						'entities' => [],
+						'intents' => [],
+						'inputs' => [],
+						];
+				} else {
+					$this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['people'][$event->people['id']]['context'] = $result['context'];
+					if (!empty($result['entities']))
+						$this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['people'][$event->people['id']]['entities'][] = $result['entities'];
+					else
+						$this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['people'][$event->people['id']]['entities'][] = [];
+					if (!empty($result['intents']))
+						$this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['people'][$event->people['id']]['intents'][] = $result['intents'];
+					else
+						$this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['people'][$event->people['id']]['intents'][] = [];
+					if (!empty($result['input']))
+						$this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['people'][$event->people['id']]['inputs'][] = $result['input'];
+					else
+						$this->storage->watson_conversation['contexts']['rooms'][$event->rooms['id']]['people'][$event->people['id']]['inputs'][] = [];
+				}
+			}
 		}
+		$result['context']['entities'] = $prev_entities;
+		$result['context']['intents'] = $prev_intents;
+		$result['context']['inputs'] = $prev_inputs;
 		$this->logger->addDebug(__FILE__.": ".__METHOD__.": ".\function_end($function_start));
 		return $result;
 
