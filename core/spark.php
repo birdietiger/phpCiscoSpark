@@ -2351,7 +2351,8 @@ class Spark {
 						//	$bot_command_message_data_markdown = preg_replace($remove_this, '', $event->messages['markdown']);
 						if (!empty($event->messages['html'])) {
 							$html_mention = '<spark-mention data-object-type=\"person\" data-object-id=\"'.$this->me['id'].'\">.+<\/spark-mention>';
-							$remove_this = "/^\s*(<\/?[^>]+>\s*)*($html_mention\s*)?(<\/?[^>]+>\s*)*\/$bot_command\s*/";
+							//$remove_this = "/^\s*(<\/?[^>]+>\s*)*($html_mention\s*)?(<\/?[^>]+>\s*)*\/$bot_command\s*/";
+							$remove_this = "/^\s*(<\/?[^>]+>\s*)*($html_mention\s*)?(<\/?[^>]+>\s*)*\/$bot_command(\s*<\/p>\s*<p>)?\s*(<br\/?>\s*)*/";
 							$bot_command_message_data_html = trim(preg_replace($remove_this, "$1$3", $event->messages['html']));
 						}
 					}
